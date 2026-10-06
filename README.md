@@ -27,4 +27,7 @@ The repository is intentionally built as a clean ACCE baseline. Historical imple
 
 ## Development
 
+The initial clean baseline is under active validation.
+
+
 Python 3.10+ is required. The project is designed so the deterministic test suite can run without external provider connectivity.
