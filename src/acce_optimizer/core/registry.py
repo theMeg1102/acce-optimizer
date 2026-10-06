@@ -136,7 +136,7 @@ def _validate_measured_at(value: Any) -> str:
 
 
 def validate_production_registry(snapshot: Mapping[str, Any]) -> dict[str, Any]:
-    """Validate a complete, measured Aurora model registry without inventing metadata."""
+    """Validate a complete, measured production model registry without inventing metadata."""
     if not isinstance(snapshot, Mapping):
         raise ContractValidationError("production registry must be an object")
     copied = deepcopy(dict(snapshot))
