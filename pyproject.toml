@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "acce-optimizer"
+version = "0.1.0"
+description = "Adaptive Context and Cost Engine - governed adaptive model routing, cost optimization, quota preservation, and context-aware execution planning."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = ["Development Status :: 3 - Alpha","Programming Language :: Python :: 3","Programming Language :: Python :: 3 :: Only"]
+[project.scripts]
+acce = "acce_optimizer.cli:main"
+[tool.setuptools.packages.find]
+where = ["src"]
