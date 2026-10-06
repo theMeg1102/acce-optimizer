@@ -51,7 +51,8 @@ def test_preference_observation_thresholds_grow_by_two():
 
 
 def test_preference_promotion_defaults_are_configurable():
-    policy = RoutingPolicy(preference_mode="learned")
+    policy = RoutingPolicy()
+    assert policy.preference_mode == "learned"
     assert policy.preference_observation_count == 5
     assert policy.preference_agreement_threshold == 0.85
     assert policy.preference_confidence_threshold == 0.85
