@@ -12,7 +12,7 @@ from acce_optimizer.core.io import stable_json
 from acce_optimizer.core.models import DecisionRequest
 from acce_optimizer.core.ollama_measurement import OllamaMeasurementClient
 from acce_optimizer.core.openclaw_adapter import OpenClawStatusAdapter
-from acce_optimizer.core.registry import CapabilityRegistry, validate_production_registry
+from acce_optimizer.core.registry import validate_production_registry
 from acce_optimizer.core.runner import run_fixture
 from acce_optimizer.core.runtime import (
     DecisionService,
@@ -24,11 +24,12 @@ from acce_optimizer.core.runtime import (
 
 def build_self_check() -> dict:
     return {
-        "system": "acce-adaptive-routing",
+        "system": "adaptive-context-and-cost-engine",
+        "name": "ACCE",
         "version": __version__,
         "namespace": "acce_optimizer.core",
         "compatibility_entrypoint": "acce_optimizer",
-        "phase": "Adaptive Model Routing Validation",
+        "phase": "Adaptive Routing Validation",
         "status": "adaptive_shadow_ready_production_routing_disabled",
         "runtime_mode": "offline_reusable_runtime",
         "public_contract": "DecisionService.decide(request)",
@@ -80,16 +81,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--request", type=Path)
     parser.add_argument("--registry", type=Path)
     parser.add_argument("--decision-log", type=Path)
-    parser.add_argument(
-        "--regression-manifest",
-        type=Path,
-        default=None,
-    )
-    parser.add_argument(
-        "--acceptance-report",
-        type=Path,
-        default=None,
-    )
+    parser.add_argument("--regression-manifest", type=Path, default=None)
+    parser.add_argument("--acceptance-report", type=Path, default=None)
     parser.add_argument("--quota-remaining", type=float, default=1.0)
     parser.add_argument("--monthly-budget-usd", type=float, default=20.0)
     parser.add_argument("--monthly-spend-usd", type=float, default=0.0)
@@ -97,7 +90,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     def require_files(*paths: Path | None) -> None:
-        missing = ["<required path>" if path is None else str(path) for path in paths if path is None or not path.is_file()]
+        missing = [
+            "<required path>" if path is None else str(path)
+            for path in paths
+            if path is None or not path.is_file()
+        ]
         if missing:
             parser.error("required input file(s) not found: " + ", ".join(missing))
 
