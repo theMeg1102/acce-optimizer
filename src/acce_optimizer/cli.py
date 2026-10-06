@@ -77,18 +77,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ollama-endpoint", default="http://127.0.0.1:11434")
     parser.add_argument("--ollama-model", action="append", default=[])
     parser.add_argument("--measurement-output", type=Path)
-    parser.add_argument("--request", type=Path, default=Path("fixtures/requests/sprint_003_multiple_routes_request.json"))
-    parser.add_argument("--registry", type=Path, default=Path("fixtures/registry/sprint_003_registry.json"))
+    parser.add_argument("--request", type=Path)
+    parser.add_argument("--registry", type=Path)
     parser.add_argument("--decision-log", type=Path)
     parser.add_argument(
         "--regression-manifest",
         type=Path,
-        default=Path("fixtures/regression/sprint_004_regression_pack.json"),
+        default=None,
     )
     parser.add_argument(
         "--acceptance-report",
         type=Path,
-        default=Path("evidence/acceptance/sprint_004_acceptance_report.json"),
+        default=None,
     )
     parser.add_argument("--quota-remaining", type=float, default=1.0)
     parser.add_argument("--monthly-budget-usd", type=float, default=20.0)
@@ -96,8 +96,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--write-evidence", action="store_true")
     args = parser.parse_args(argv)
 
-    def require_files(*paths: Path) -> None:
-        missing = [str(path) for path in paths if not path.is_file()]
+    def require_files(*paths: Path | None) -> None:
+        missing = ["<required path>" if path is None else str(path) for path in paths if path is None or not path.is_file()]
         if missing:
             parser.error("required input file(s) not found: " + ", ".join(missing))
 
