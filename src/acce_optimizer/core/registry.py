@@ -67,7 +67,7 @@ class CapabilityRegistry:
 
     @classmethod
     def from_production_snapshot(cls, snapshot: Mapping[str, Any]) -> "CapabilityRegistry":
-        """Build a registry only after its real model inventory passes strict validation."""
+        """Build a registry from a production snapshot after strict validation."""
         return cls(snapshot, require_production=True)
 
     def candidates_for(self, capability_id: str) -> list[CandidateRoute]:
