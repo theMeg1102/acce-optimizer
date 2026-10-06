@@ -72,7 +72,7 @@ def _run_regression_case(
     request_path = root / case["request"]
     registry_path = root / case["registry"]
     first = run_decision(request_path, registry_path, decision_log_path=None)
-    second = run_fixture(request_path, registry_path, decision_log_path=None)
+    second = run_decision(request_path, registry_path, decision_log_path=None)
     if decision_log_path is not None:
         append_decision_log(decision_log_path, first)
 
