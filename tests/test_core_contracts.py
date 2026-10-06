@@ -1,6 +1,6 @@
-from acce_optimizer.prototype.graph import EdgeWeight, GraphEdge, GraphNode, GraphSnapshot, TaskDemand
-from acce_optimizer.prototype.learning import LearnedPreference
-from acce_optimizer.prototype.resource_state import ResourceState
+from acce_optimizer.core.graph import EdgeWeight, GraphEdge, GraphNode, GraphSnapshot, TaskDemand
+from acce_optimizer.core.learning import LearnedPreference
+from acce_optimizer.core.resource_state import ResourceState
 
 
 def test_core_contracts_are_immutable_and_validated():

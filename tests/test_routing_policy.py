@@ -1,5 +1,5 @@
-from acce_optimizer.prototype.learning import LearnedPreference, LearnedRouteEstimate
-from acce_optimizer.prototype.routing_policy import RoutingPolicy, cloud_override_allowed, preference_is_promotable
+from acce_optimizer.core.learning import LearnedPreference, LearnedRouteEstimate
+from acce_optimizer.core.routing_policy import RoutingPolicy, cloud_override_allowed, preference_is_promotable
 
 
 def estimate(route, quality):

@@ -1,6 +1,6 @@
-from acce_optimizer.prototype.graph import EdgeWeight, GraphEdge, GraphNode, GraphSnapshot
-from acce_optimizer.prototype.graph_search import astar, dijkstra
-from acce_optimizer.prototype.heuristic import build_admissible_heuristic
+from acce_optimizer.core.graph import EdgeWeight, GraphEdge, GraphNode, GraphSnapshot
+from acce_optimizer.core.graph_search import astar, dijkstra
+from acce_optimizer.core.heuristic import build_admissible_heuristic
 
 
 def make_graph():
@@ -22,7 +22,7 @@ def test_dijkstra_and_astar_select_same_minimum_cost_path():
     d = dijkstra(graph, "start", "goal")
     heuristic = build_admissible_heuristic(
         graph,
-        __import__("acce_optimizer.prototype.graph", fromlist=["TaskDemand"]).TaskDemand(
+        __import__("acce_optimizer.core.graph", fromlist=["TaskDemand"]).TaskDemand(
             0.1, 0.1, 0.1, 100, 0.1, 0.1, 0.1, 0.1, 0.5
         ),
     )
