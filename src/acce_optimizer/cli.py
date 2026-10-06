@@ -13,7 +13,7 @@ from acce_optimizer.core.models import DecisionRequest
 from acce_optimizer.core.ollama_measurement import OllamaMeasurementClient
 from acce_optimizer.core.openclaw_adapter import OpenClawStatusAdapter
 from acce_optimizer.core.registry import validate_production_registry
-from acce_optimizer.core.runner import run_fixture
+from acce_optimizer.core.runner import run_decision
 from acce_optimizer.core.runtime import (
     DecisionService,
     EconomicPolicy,
@@ -51,7 +51,7 @@ def build_self_check() -> dict:
         "available_commands": [
             "--self-check",
             "--runtime-contract",
-            "--run-fixture",
+            "--run-decision",
             "--run-acceptance",
             "--run-adaptive-shadow",
             "--validate-production-registry",
@@ -64,39 +64,39 @@ def build_self_check() -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="acce")
-    parser.add_argument("--self-check", action="store_true")
-    parser.add_argument("--runtime-contract", action="store_true")
-    parser.add_argument("--run-fixture", action="store_true")
-    parser.add_argument("--run-acceptance", action="store_true")
-    parser.add_argument("--run-adaptive-shadow", action="store_true")
-    parser.add_argument("--validate-production-registry", action="store_true")
-    parser.add_argument("--measure-ollama", action="store_true")
-    parser.add_argument("--observe-openclaw-status", action="store_true")
-    parser.add_argument("--openclaw-status-input", default="-")
-    parser.add_argument("--openclaw-session-key")
-    parser.add_argument("--safe-status-output", type=Path)
-    parser.add_argument("--ollama-endpoint", default="http://127.0.0.1:11434")
-    parser.add_argument("--ollama-model", action="append", default=[])
-    parser.add_argument("--measurement-output", type=Path)
-    parser.add_argument("--request", type=Path)
-    parser.add_argument("--registry", type=Path)
-    parser.add_argument("--decision-log", type=Path)
-    parser.add_argument("--regression-manifest", type=Path, default=None)
-    parser.add_argument("--acceptance-report", type=Path, default=None)
-    parser.add_argument("--quota-remaining", type=float, default=1.0)
-    parser.add_argument("--monthly-budget-usd", type=float, default=20.0)
-    parser.add_argument("--monthly-spend-usd", type=float, default=0.0)
-    parser.add_argument("--write-evidence", action="store_true")
+    parser.add_argument("--self-check", action="store_true", help="Validate ACCE runtime availability and core contract status.")
+    parser.add_argument("--runtime-contract", action="store_true", help="Print the public runtime contract and safety constraints.")
+    parser.add_argument("--run-decision", action="store_true", help="Run one deterministic decision from --request and --registry.")
+    parser.add_argument("--run-acceptance", action="store_true", help="Run configured regression cases from --regression-manifest.")
+    parser.add_argument("--run-adaptive-shadow", action="store_true", help="Evaluate the adaptive shadow path without changing the authoritative decision.")
+    parser.add_argument("--validate-production-registry", action="store_true", help="Validate a complete production registry supplied with --registry.")
+    parser.add_argument("--measure-ollama", action="store_true", help="Measure configured local model inventory with --ollama-model.")
+    parser.add_argument("--observe-openclaw-status", action="store_true", help="Read OpenClaw status evidence without mutating the session.")
+    parser.add_argument("--openclaw-status-input", default="-", help="JSON file containing OpenClaw status evidence, or - for stdin.")
+    parser.add_argument("--openclaw-session-key", help="Session key required for safe OpenClaw observation.")
+    parser.add_argument("--safe-status-output", type=Path, help="Optional path for minimized safe OpenClaw status evidence.")
+    parser.add_argument("--ollama-endpoint", default="http://127.0.0.1:11434", help="Ollama endpoint used for local inventory measurement.")
+    parser.add_argument("--ollama-model", action="append", default=[], help="Model identifier to measure; repeat for multiple models.")
+    parser.add_argument("--measurement-output", type=Path, help="Optional path for the Ollama measurement report.")
+    parser.add_argument("--request", type=Path, metavar="PATH", help="Decision request JSON input. Required by --run-decision and --run-adaptive-shadow.")
+    parser.add_argument("--registry", type=Path, metavar="PATH", help="ACCE registry JSON input. Required by --run-decision, --run-adaptive-shadow, and --validate-production-registry.")
+    parser.add_argument("--decision-log", type=Path, metavar="PATH", help="Optional decision log output when --write-evidence is enabled.")
+    parser.add_argument("--regression-manifest", type=Path, metavar="PATH", default=None, help="Configured regression manifest required by --run-acceptance.")
+    parser.add_argument("--acceptance-report", type=Path, metavar="PATH", default=None, help="Optional acceptance report output when --write-evidence is enabled.")
+    parser.add_argument("--quota-remaining", type=float, default=1.0, help="Trusted remaining cloud quota fraction used by offline evaluation.")
+    parser.add_argument("--monthly-budget-usd", type=float, default=20.0, help="Configured monthly cloud budget used by offline evaluation.")
+    parser.add_argument("--monthly-spend-usd", type=float, default=0.0, help="Configured monthly cloud spend used by offline evaluation.")
+    parser.add_argument("--write-evidence", action="store_true", help="Persist minimized decision or acceptance evidence to the requested output path.")
     args = parser.parse_args(argv)
 
-    def require_files(*paths: Path | None) -> None:
+    def require_files(*named_paths: tuple[str, Path | None]) -> None:
         missing = [
-            "<required path>" if path is None else str(path)
-            for path in paths
+            option if path is None else f"{option}={path}"
+            for option, path in named_paths
             if path is None or not path.is_file()
         ]
         if missing:
-            parser.error("required input file(s) not found: " + ", ".join(missing))
+            parser.error("missing required input: " + ", ".join(missing))
 
     if args.self_check:
         print(stable_json(build_self_check()))
@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.validate_production_registry:
-        require_files(args.registry)
+        require_files(("--registry", args.registry))
         data = json.loads(args.registry.read_text(encoding="utf-8"))
         print(stable_json(validate_production_registry(data)))
         return 0
@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
             payload = json.load(sys.stdin)
         else:
             status_path = Path(args.openclaw_status_input)
-            require_files(status_path)
+            require_files(("--openclaw-status-input", status_path))
             payload = json.loads(status_path.read_text(encoding="utf-8"))
         evidence = OpenClawStatusAdapter.observe(
             payload,
@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.run_adaptive_shadow:
-        require_files(args.request, args.registry)
+        require_files(("--request", args.request), ("--registry", args.registry))
         request = DecisionRequest.from_mapping(
             json.loads(args.request.read_text(encoding="utf-8"))
         )
@@ -162,9 +162,9 @@ def main(argv: list[str] | None = None) -> int:
         print(stable_json(service.shadow_adaptive_decision(request)))
         return 0
 
-    if args.run_fixture:
+    if args.run_decision:
         require_files(args.request, args.registry)
-        plan = run_fixture(
+        plan = run_decision(
             request_path=args.request,
             registry_path=args.registry,
             decision_log_path=args.decision_log if args.write_evidence else None,
@@ -173,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.run_acceptance:
-        require_files(args.regression_manifest)
+        require_files(("--regression-manifest", args.regression_manifest))
         report = run_acceptance(
             root=Path("."),
             regression_manifest_path=args.regression_manifest,
