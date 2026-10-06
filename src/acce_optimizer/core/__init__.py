@@ -5,7 +5,18 @@ from .ollama_measurement import OllamaMeasurementClient
 from .registry import CapabilityRegistry, validate_production_registry
 from .runtime import ContextPolicy, DecisionService, EconomicPolicy, QuotaPolicy, runtime_contract
 
-try:\n    from importlib.metadata import version as _distribution_version\nexcept ImportError:  # pragma: no cover\n    _distribution_version = None\n\nif _distribution_version is None:\n    __version__ = "0.1.0"\nelse:\n    try:\n        __version__ = _distribution_version("acce-optimizer")\n    except Exception:  # pragma: no cover\n        __version__ = "0.1.0"
+try:
+    from importlib.metadata import version as _distribution_version
+except ImportError:  # pragma: no cover
+    _distribution_version = None
+
+if _distribution_version is None:
+    __version__ = "0.1.0"
+else:
+    try:
+        __version__ = _distribution_version("acce-optimizer")
+    except Exception:  # pragma: no cover
+        __version__ = "0.1.0"
 
 __all__ = [
     "ContextPolicy",
