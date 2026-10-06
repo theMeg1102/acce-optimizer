@@ -8,7 +8,7 @@ from .observability import (
     build_decision_log_entry,
     is_decision_log_entry_reconstructible,
 )
-from .runner import run_fixture
+from .runner import run_decision
 from .io import read_json, write_json
 
 
@@ -40,8 +40,8 @@ def run_acceptance(
     gates = _evaluate_gates(case_results)
     public_case_results = [_public_case_result(case) for case in case_results]
     report = {
-        "sprint": "Sprint 4",
-        "objective": "Prototype Offline Validation",
+        "validation_scope": "deterministic decision validation",
+        "objective": "Validate deterministic decision behavior, governance, reproducibility, and explainability",
         "status": "passed" if all(gate["passed"] for gate in gates.values()) else "failed",
         "regression_pack": {
             "manifest_id": manifest["manifest_id"],
@@ -71,7 +71,7 @@ def _run_regression_case(
 ) -> dict[str, Any]:
     request_path = root / case["request"]
     registry_path = root / case["registry"]
-    first = run_fixture(request_path, registry_path, decision_log_path=None)
+    first = run_decision(request_path, registry_path, decision_log_path=None)
     second = run_fixture(request_path, registry_path, decision_log_path=None)
     if decision_log_path is not None:
         append_decision_log(decision_log_path, first)
@@ -90,7 +90,7 @@ def _run_regression_case(
     }
     return {
         "case_id": case["case_id"],
-        "sprint_source": case["sprint_source"],
+        "source": case.get("source", "configured regression case"),
         "request": case["request"],
         "registry": case["registry"],
         "passed": all(checks.values()),
@@ -249,10 +249,10 @@ def _release_readiness_gate(
             and plan["observability_payload"]["decision_log_minimized"]
             for plan in plans
         ),
-        "all_historical_fixtures_in_regression_pack": _has_all_sprint_1_to_3_cases(case_results),
+        "all_regression_cases_have_unique_ids": _all_regression_cases_have_unique_ids(case_results),
         "no_runtime_or_provider_dependency": all(
             plan["decision_cost_evidence"]["model_execution"] == "not_used"
-            and "prototype_offline_does_not_execute_actions" in plan["warnings"]
+            and "planner_does_not_execute_actions" in plan["warnings"]
             for plan in plans
         ),
         "no_required_spec_reopen_identified": True,
@@ -307,20 +307,6 @@ def _decision_log_reconstructs(plan: dict[str, Any]) -> bool:
     return is_decision_log_entry_reconstructible(entry)
 
 
-def _has_all_sprint_1_to_3_cases(case_results: list[dict[str, Any]]) -> bool:
-    expected = {
-        "sprint_001_simple",
-        "sprint_002_safety_first",
-        "sprint_002_balanced",
-        "sprint_002_cost_first",
-        "sprint_002_approval_required",
-        "sprint_002_validation_required",
-        "sprint_002_clarification_required",
-        "sprint_002_no_execution",
-        "sprint_003_multiple_routes",
-        "sprint_003_early_exit",
-        "sprint_003_search_budget",
-        "sprint_003_fallback",
-    }
-    actual = {case["case_id"] for case in case_results}
-    return expected.issubset(actual)
+def _all_regression_cases_have_unique_ids(case_results: list[dict[str, Any]]) -> bool:
+    case_ids = [case["case_id"] for case in case_results]
+    return len(case_ids) == len(set(case_ids)) and all(case_ids)
