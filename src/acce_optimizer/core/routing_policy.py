@@ -99,6 +99,30 @@ def route_is_governed(
     return True
 
 
+def next_preference_observation_count(
+    evidence_count: int,
+    policy: RoutingPolicy,
+) -> int:
+    """Return the next odd evidence threshold for preference promotion.
+
+    Evidence thresholds grow incrementally from the configured starting
+    threshold (5 by default) to 7, 9, 11, and so on. A preference is never
+    promoted merely because its evidence count is high; promotion is
+    evaluated at one of these governed odd thresholds.
+    """
+
+    if evidence_count < 0:
+        raise ContractValidationError("evidence_count must be >= 0")
+    start = policy.preference_observation_count
+    if start < 1 or start % 2 == 0:
+        raise ContractValidationError(
+            "preference_observation_count must be a positive odd integer"
+        )
+    if evidence_count < start:
+        return start
+    return start + 2 * ((evidence_count - start) // 2 + 1)
+
+
 def preference_is_promotable(
     preference: LearnedPreference,
     *,
@@ -110,7 +134,8 @@ def preference_is_promotable(
 
     if policy.preference_mode != "learned":
         return False
-    if preference.evidence_count < policy.preference_observation_count:
+    threshold = policy.preference_observation_count
+    if preference.evidence_count < threshold:
         return False
     if preference.evidence_count % 2 == 0:
         return False
