@@ -38,3 +38,13 @@ def test_cloud_override_uses_configurable_quality_advantage():
         urgency="normal",
         policy=policy,
     )
+
+
+def test_preference_observation_thresholds_grow_by_two():
+    policy = RoutingPolicy()
+    assert next_preference_observation_count(0, policy) == 5
+    assert next_preference_observation_count(4, policy) == 5
+    assert next_preference_observation_count(5, policy) == 7
+    assert next_preference_observation_count(6, policy) == 7
+    assert next_preference_observation_count(7, policy) == 9
+    assert next_preference_observation_count(8, policy) == 9
