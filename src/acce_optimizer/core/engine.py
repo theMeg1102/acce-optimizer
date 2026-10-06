@@ -204,8 +204,8 @@ def build_execution_plan(request: DecisionRequest, registry: CapabilityRegistry)
             stop_condition,
         ),
         "material_assumptions": [
-            "Registry fixture is the complete declared snapshot for this decision",
-            "Policy fixture represents the active local-first operational policy",
+            "Registry snapshot is the complete declared inventory for this decision",
+            "Policy snapshot represents the active local-first operational policy",
             "Configuration snapshot captures the active Search Budget and profile weights",
         ],
         "different_decision_conditions": _different_decision_conditions(discarded_routes),
