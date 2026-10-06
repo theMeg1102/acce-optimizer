@@ -36,6 +36,7 @@ class RoutingPolicy:
     preference_mode: PreferenceMode = "auto"
     preference_observation_count: int = 5
     preference_agreement_threshold: float = 0.85
+    preference_confidence_threshold: float = 0.85
     demand_similarity_threshold: float = 0.80
     task_similarity_threshold: float = 0.80
 
@@ -59,6 +60,7 @@ class RoutingPolicy:
             )
         for field in (
             "preference_agreement_threshold",
+            "preference_confidence_threshold",
             "demand_similarity_threshold",
             "task_similarity_threshold",
             "cloud_override_threshold_normal",
@@ -145,7 +147,7 @@ def preference_is_promotable(
         return False
     if task_similarity < policy.task_similarity_threshold:
         return False
-    return preference.confidence >= policy.preference_agreement_threshold
+    return preference.confidence >= policy.preference_confidence_threshold
 
 
 def cloud_override_allowed(
