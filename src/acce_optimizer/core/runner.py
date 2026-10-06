@@ -7,7 +7,7 @@ from .models import DecisionRequest
 from .runtime import DecisionService
 
 
-def run_fixture(request_path: Path, registry_path: Path, decision_log_path: Path | None) -> dict:
+def run_decision(request_path: Path, registry_path: Path, decision_log_path: Path | None) -> dict:
     request = DecisionRequest.from_mapping(read_json(request_path))
     service = DecisionService.from_paths(
         registry_path=registry_path,
