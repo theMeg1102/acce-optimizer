@@ -88,6 +88,30 @@ acce --self-check
 acce --runtime-contract
 ```
 
+### Command-line decision evaluation
+
+ACCE keeps decision inputs explicit and installation-specific. A decision request and registry are supplied by the host; ACCE does not embed a machine-specific model inventory.
+
+Run one authoritative deterministic decision:
+
+```bash
+acce --run-decision --request PATH --registry PATH
+```
+
+Run adaptive evaluation without changing the authoritative decision:
+
+```bash
+acce --run-adaptive-shadow --request PATH --registry PATH
+```
+
+Validate a production registry:
+
+```bash
+acce --validate-production-registry --registry PATH
+```
+
+The CLI intentionally keeps `--request` and `--registry` optional at argument-parsing time because they are conditional inputs: they are required only by commands that consume them. ACCE validates those dependencies at runtime and reports the missing option explicitly. This follows Python's `argparse` model for optional flags and avoids using required optional arguments as a substitute for command-specific validation.
+
 The package requires Python 3.10 or newer. The deterministic test suite does not require external provider connectivity.
 
 ## Development validation
