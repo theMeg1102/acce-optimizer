@@ -1,6 +1,6 @@
 """Public ACCE API."""
 
-from .prototype import (
+from .core import (
     ContextPolicy,
     CapabilityRegistry,
     ContractValidationError,
@@ -12,8 +12,8 @@ from .prototype import (
     runtime_contract,
     validate_production_registry,
 )
-from .prototype.trusted_state import ContextTelemetry, MonthlyUsageLedger, TrustedRuntimeState
-from .prototype.openclaw_adapter import OpenClawStatusAdapter, OpenClawStatusObservation
+from .core.trusted_state import ContextTelemetry, MonthlyUsageLedger, TrustedRuntimeState
+from .core.openclaw_adapter import OpenClawStatusAdapter, OpenClawStatusObservation
 
 __all__ = [
     "ContextPolicy",
