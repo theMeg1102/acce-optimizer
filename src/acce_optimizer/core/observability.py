@@ -29,7 +29,6 @@ def build_decision_log_entry(plan: dict[str, Any]) -> dict[str, Any]:
         "logged_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "logged_at_local": datetime.now(LOCAL_TZ).isoformat(timespec="seconds"),
         "decision_id": plan["decision_id"],
-        "sprint": plan["sprint"],
         "decision_state": plan["decision_state"],
         "normalized_request": normalized_request,
         "profile_used": plan["profile_used"],
@@ -98,7 +97,7 @@ def reconstruct_decision_id_from_log_entry(entry: dict[str, Any]) -> str:
         "decision_state": entry["decision_state"],
     }
     digest = hashlib.sha256(json.dumps(source, sort_keys=True).encode("utf-8")).hexdigest()
-    return f"acce-sprint-003-{digest[:16]}"
+    return f"acce-decision-{digest[:16]}"
 
 
 def is_decision_log_entry_reconstructible(entry: dict[str, Any]) -> bool:
