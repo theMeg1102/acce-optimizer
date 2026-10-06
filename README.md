@@ -108,3 +108,7 @@ The clean baseline is intentionally small so the next development work can focus
 This repository is the clean ACCE baseline. Obsolete historical implementation surfaces are intentionally excluded from the active codebase.
 
 The current codebase contains no legacy routing-gate, production-pilot, canary, obsolete catalog, or provider-specific fallback architecture.
+
+### Preference learning defaults
+
+Preference learning starts at 5 observations and evaluates only odd checkpoints, increasing incrementally to 7, 9, 11, and so on while the promotion criteria are not met. Defaults are 85% agreement, 85% confidence, 80% demand similarity, 80% task similarity, and `preference_mode = "learned"`; all are configurable. An effective change in the preferred route resets the learning cycle to 5 observations. Confirming the existing preference does not reset evidence.
