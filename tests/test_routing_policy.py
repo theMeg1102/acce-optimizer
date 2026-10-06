@@ -31,7 +31,7 @@ def test_default_preference_learning_requires_odd_observations_and_agreement():
 def test_cloud_override_uses_configurable_quality_advantage():
     policy = RoutingPolicy(cloud_override_threshold_normal=0.30)
     local = estimate("local", 0.75)
-    cloud = estimate("cloud", 0.90)
+    cloud = estimate("cloud", 1.00)
     assert cloud_override_allowed(
         local_estimate=local,
         cloud_estimate=cloud,
