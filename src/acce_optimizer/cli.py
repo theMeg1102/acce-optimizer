@@ -7,14 +7,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__
-from acce_optimizer.prototype.acceptance import run_acceptance
-from acce_optimizer.prototype.io import stable_json
-from acce_optimizer.prototype.models import DecisionRequest
-from acce_optimizer.prototype.ollama_measurement import OllamaMeasurementClient
-from acce_optimizer.prototype.openclaw_adapter import OpenClawStatusAdapter
-from acce_optimizer.prototype.registry import CapabilityRegistry, validate_production_registry
-from acce_optimizer.prototype.runner import run_fixture
-from acce_optimizer.prototype.runtime import (
+from acce_optimizer.core.acceptance import run_acceptance
+from acce_optimizer.core.io import stable_json
+from acce_optimizer.core.models import DecisionRequest
+from acce_optimizer.core.ollama_measurement import OllamaMeasurementClient
+from acce_optimizer.core.openclaw_adapter import OpenClawStatusAdapter
+from acce_optimizer.core.registry import CapabilityRegistry, validate_production_registry
+from acce_optimizer.core.runner import run_fixture
+from acce_optimizer.core.runtime import (
     DecisionService,
     EconomicPolicy,
     QuotaPolicy,
@@ -26,7 +26,7 @@ def build_self_check() -> dict:
     return {
         "system": "acce-adaptive-routing",
         "version": __version__,
-        "namespace": "acce_optimizer.prototype",
+        "namespace": "acce_optimizer.core",
         "compatibility_entrypoint": "acce_optimizer",
         "phase": "Adaptive Model Routing Validation",
         "status": "adaptive_shadow_ready_production_routing_disabled",
