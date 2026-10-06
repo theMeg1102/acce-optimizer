@@ -79,3 +79,31 @@ class LearnedPreference:
             raise ContractValidationError("agreement_rate must be between 0 and 1")
         if self.reset_generation < 0:
             raise ContractValidationError("reset_generation must be >= 0")
+
+
+def reset_preference_on_change(
+    preference: LearnedPreference,
+    preferred_route: str,
+) -> LearnedPreference:
+    """Reset preference evidence only when the effective preferred route changes.
+
+    A new preference-learning cycle starts with zero observations; the policy's
+    first promotion checkpoint is therefore its configured odd starting count
+    (5 by default). Confirming the existing preferred route does not reset or
+    discard evidence.
+    """
+    if not preferred_route.strip():
+        raise ContractValidationError("preferred_route must be non-empty")
+    if preferred_route == preference.preferred_route:
+        return preference
+    return LearnedPreference(
+        scope=preference.scope,
+        task_signature=preference.task_signature,
+        preferred_route=preferred_route,
+        mode=preference.mode,
+        confidence=0.0,
+        evidence_count=0,
+        success_rate=0.0,
+        agreement_rate=0.0,
+        reset_generation=preference.reset_generation + 1,
+    )
