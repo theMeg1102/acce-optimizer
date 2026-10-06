@@ -33,7 +33,7 @@ class RoutingPolicy:
     budget_scarcity_weight: float = 2.0
 
     # Preference-learning governance.
-    preference_mode: PreferenceMode = "auto"
+    preference_mode: PreferenceMode = "learned"
     preference_observation_count: int = 5
     preference_agreement_threshold: float = 0.85
     preference_confidence_threshold: float = 0.85
