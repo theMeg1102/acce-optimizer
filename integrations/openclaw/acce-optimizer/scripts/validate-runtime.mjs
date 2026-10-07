@@ -36,9 +36,6 @@ try {
     configPath,
     JSON.stringify({
       plugins: {
-        load: {
-          paths: [packageRoot],
-        },
         allow: ["acce-optimizer"],
         entries: {
           "acce-optimizer": {
@@ -52,6 +49,12 @@ try {
     }),
     "utf8",
   );
+
+  // Use OpenClaw's documented local-plugin installation path so runtime
+  // validation exercises the same install, enablement, and ownership flow
+  // used by an operator.
+  await run("openclaw", ["plugins", "install", "--link", packageRoot, "--force"], env);
+  await run("openclaw", ["plugins", "enable", "acce-optimizer"], env);
 
   const inspect = await new Promise((resolve, reject) => {
     const child = spawn(
@@ -99,7 +102,9 @@ try {
     );
   }
 
-  if (plugin.error) { throw new Error(`Runtime inspection reported plugin error: ${plugin.error}`); }
+  if (plugin.error) {
+    throw new Error(`Runtime inspection reported plugin error: ${plugin.error}`);
+  }
 
   const typedHooks = Array.isArray(plugin.typedHooks) ? plugin.typedHooks : [];
   const hookNames = typedHooks.map((hook) => hook?.name).filter(Boolean);
