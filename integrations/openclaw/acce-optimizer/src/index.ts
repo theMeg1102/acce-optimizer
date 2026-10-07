@@ -22,16 +22,13 @@ export default definePluginEntry({
         return;
       }
 
-      api.logger.info(
-        {
-          mode: "shadow",
-          hook: "before_model_resolve",
-          sessionKey: ctx.sessionKey ?? null,
-          runId: ctx.runId ?? null,
-          promptPresent: typeof event.prompt === "string" && event.prompt.length > 0,
-        },
-        "ACCE shadow observation received",
-      );
+      api.logger.info({
+        mode: "shadow",
+        hook: "before_model_resolve",
+        sessionKey: ctx.sessionKey ?? null,
+        runId: ctx.runId ?? null,
+        promptPresent: typeof event.prompt === "string" && event.prompt.length > 0,
+      });
 
       // Shadow mode is intentionally non-mutating. ACCE does not override
       // provider or model selection until the authoritative integration gate
