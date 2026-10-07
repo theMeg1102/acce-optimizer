@@ -75,17 +75,31 @@ try {
   });
 
   const report = JSON.parse(inspect);
-  const plugin = Array.isArray(report.plugins)
-    ? report.plugins.find((entry) => entry.id === "acce-optimizer")
-    : report.id === "acce-optimizer"
-      ? report
-      : null;
 
-  if (!plugin) {
-    throw new Error("Runtime inspection did not report acce-optimizer.");
+  function findPlugin(value) {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    if (!Array.isArray(value) && value.id === "acce-optimizer") {
+      return value;
+    }
+    for (const child of Array.isArray(value) ? value : Object.values(value)) {
+      const match = findPlugin(child);
+      if (match) {
+        return match;
+      }
+    }
+    return null;
   }
 
-  const hooks = JSON.stringify(plugin.hooks ?? report.hooks ?? {});
+  const plugin = findPlugin(report);
+  if (!plugin) {
+    throw new Error(
+      `Runtime inspection did not report acce-optimizer. Report keys: ${Object.keys(report).join(", ")}`,
+    );
+  }
+
+  const hooks = JSON.stringify(plugin.hooks ?? {});
   if (!hooks.includes("before_model_resolve")) {
     throw new Error("Runtime inspection did not report before_model_resolve.");
   }
