@@ -7,7 +7,7 @@ This directory contains the OpenClaw-native adapter for ACCE Optimizer.
 The adapter is intentionally limited to **shadow mode**.
 
 - The hook is registered with OpenClaw's typed `before_model_resolve` API.
-- The plugin is disabled by default.
+- The plugin is enabled by default in shadow mode.
 - Shadow observations do not return `providerOverride` or `modelOverride`.
 - The ACCE core remains independent of OpenClaw.
 - Production routing is not enabled by this integration.
@@ -36,6 +36,10 @@ When this plugin is enabled as a non-bundled OpenClaw plugin, the host configura
 ```
 
 This permission is controlled by OpenClaw and is separate from ACCE's own routing and governance controls.
+
+## Runtime validation
+
+The integration is validated as a hook-only OpenClaw plugin. Validation confirms runtime registration of `before_model_resolve`, conversation-hook permission, and the absence of production model/provider overrides.
 
 ## Next integration phase
 
