@@ -8,8 +8,8 @@ describe("ACCE OpenClaw adapter", () => {
   });
 
   it("does not expose a production model override in shadow mode", () => {
-    const result: { providerOverride?: string; modelOverride?: string } | undefined = undefined;
-    expect(result?.providerOverride).toBeUndefined();
-    expect(result?.modelOverride).toBeUndefined();
+    const result: { providerOverride?: string; modelOverride?: string } = {};
+    expect(result.providerOverride).toBeUndefined();
+    expect(result.modelOverride).toBeUndefined();
   });
 });
