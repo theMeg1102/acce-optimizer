@@ -99,6 +99,8 @@ try {
     );
   }
 
+  if (plugin.error) { throw new Error(`Runtime inspection reported plugin error: ${plugin.error}`); }
+
   const typedHooks = Array.isArray(plugin.typedHooks) ? plugin.typedHooks : [];
   const hookNames = typedHooks.map((hook) => hook?.name).filter(Boolean);
   if (!hookNames.includes("before_model_resolve")) {
