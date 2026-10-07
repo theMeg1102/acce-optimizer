@@ -19,8 +19,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run --config ./vitest.config.ts",
-    "plugin:build": "npm run build && openclaw plugins build --entry ./dist/index.js",
-    "plugin:validate": "npm run build && openclaw plugins validate --entry ./dist/index.js"
+    "plugin:validate": "npm run build && node ./scripts/validate-runtime.mjs"
   },
   "openclaw": {
     "extensions": ["./src/index.ts"],
