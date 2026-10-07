@@ -36,6 +36,9 @@ try {
     configPath,
     JSON.stringify({
       plugins: {
+        load: {
+          paths: [packageRoot],
+        },
         allow: ["acce-optimizer"],
         entries: {
           "acce-optimizer": {
@@ -50,22 +53,9 @@ try {
     "utf8",
   );
 
-  // Use OpenClaw's documented local-plugin installation path. Configuration
-  // already owns activation, so preserve that policy during installation.
-  await run(
-    "openclaw",
-    [
-      "plugins",
-      "install",
-      "--link",
-      packageRoot,
-      "--force",
-      "--accept-capabilities",
-      "--no-enable",
-    ],
-    env,
-  );
-
+  // Validate the source directly through OpenClaw's documented load-path
+  // mechanism. This intentionally avoids managed-install ownership state so
+  // the test exercises plugin discovery and runtime registration itself.
   const inspect = await new Promise((resolve, reject) => {
     const child = spawn(
       "openclaw",
