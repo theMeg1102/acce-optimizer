@@ -125,13 +125,7 @@ python3 -m pip install -e .
 python3 -m pytest -q tests
 ```
 
-The clean baseline is intentionally small so the next development work can focus on the OpenClaw integration, trusted quota/budget observation, adaptive evidence collection, and production activation criteria without carrying obsolete implementation surfaces.
-
-## Repository hygiene
-
-This repository is the clean ACCE baseline. Obsolete historical implementation surfaces are intentionally excluded from the active codebase.
-
-The current codebase contains no legacy routing-gate, production-pilot, canary, obsolete catalog, or provider-specific fallback architecture.
+The baseline is intentionally small so the next development work can focus on the OpenClaw integration, trusted quota/budget observation, adaptive evidence collection, and production activation criteria.
 
 ### Preference learning defaults
 
