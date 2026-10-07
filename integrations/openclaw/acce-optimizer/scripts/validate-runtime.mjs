@@ -53,7 +53,7 @@ try {
   // Use OpenClaw's documented local-plugin installation path so runtime
   // validation exercises the same install, enablement, and ownership flow
   // used by an operator.
-  await run("openclaw", ["plugins", "install", "--link", packageRoot, "--force"], env);
+  await run("openclaw", ["plugins", "install", "--link", packageRoot, "--force", "--accept-capabilities"], env);
   await run("openclaw", ["plugins", "enable", "acce-optimizer"], env);
 
   const inspect = await new Promise((resolve, reject) => {
