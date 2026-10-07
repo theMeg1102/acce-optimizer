@@ -36,6 +36,10 @@ try {
     configPath,
     JSON.stringify({
       plugins: {
+        load: {
+          paths: [packageRoot],
+        },
+        allow: ["acce-optimizer"],
         entries: {
           "acce-optimizer": {
             enabled: true,
@@ -47,12 +51,6 @@ try {
       },
     }),
     "utf8",
-  );
-
-  await run(
-    "openclaw",
-    ["plugins", "install", "--link", ".", "--force", "--accept-capabilities"],
-    env,
   );
 
   const inspect = await new Promise((resolve, reject) => {
