@@ -4,7 +4,8 @@
   "description": "Governed adaptive model routing, cost optimization, quota preservation, and context-aware execution planning for OpenClaw.",
   "version": "0.1.0",
   "activation": {
-    "onStartup": true
+    "onStartup": false,
+    "onCapabilities": ["hook"]
   },
   "configSchema": {
     "type": "object",
