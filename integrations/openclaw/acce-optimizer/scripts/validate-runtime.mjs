@@ -1,4 +1,4 @@
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -99,13 +99,20 @@ try {
     );
   }
 
-  const hooks = JSON.stringify(plugin.hooks ?? {});
-  if (!hooks.includes("before_model_resolve")) {
-    throw new Error("Runtime inspection did not report before_model_resolve.");
+  const typedHooks = Array.isArray(plugin.typedHooks) ? plugin.typedHooks : [];
+  const hookNames = typedHooks.map((hook) => hook?.name).filter(Boolean);
+  if (!hookNames.includes("before_model_resolve")) {
+    throw new Error(
+      `Runtime inspection did not report before_model_resolve. Registered typed hooks: ${hookNames.join(", ") || "none"}`,
+    );
   }
 
   if (plugin.shape && plugin.shape !== "hook-only") {
     throw new Error(`Expected hook-only plugin shape, got ${plugin.shape}.`);
+  }
+
+  if (plugin.policy?.allowConversationAccess !== true) {
+    throw new Error("Runtime inspection did not report conversation-hook access.");
   }
 
   process.stdout.write("ACCE Optimizer OpenClaw runtime inspection passed.\n");
