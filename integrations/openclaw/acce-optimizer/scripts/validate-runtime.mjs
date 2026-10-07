@@ -51,7 +51,7 @@ try {
 
   await run(
     "openclaw",
-    ["plugins", "install", "--link", ".", "--force"],
+    ["plugins", "install", "--link", ".", "--force", "--accept-capabilities"],
     env,
   );
 
