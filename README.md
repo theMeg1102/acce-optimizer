@@ -73,13 +73,29 @@ The initial integration path is deliberately read-only so routing behavior can b
 
 ## Installation
 
-ACCE uses the standard Python pyproject.toml package layout and exposes the acce command-line entry point.
+ACCE uses the standard Python `pyproject.toml` package layout and exposes the `acce` command-line entry point.
 
-From a checkout:
+### Recommended: isolated virtual environment
+
+For a checkout on a host where Python package installation is managed by the operating system, create an isolated virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+```
+
+This is the recommended installation path because it keeps ACCE dependencies isolated from the host Python environment.
+
+### Alternative: direct installation
+
+If the host permits package installation into the active Python environment:
 
 ```bash
 python3 -m pip install -e .
 ```
+
+Some Linux distributions mark their system Python installation as externally managed. In that case, `pip` may reject direct installation outside a virtual environment. This is a host packaging policy, not an ACCE requirement; use the virtual-environment procedure above instead.
 
 Verify the installation:
 
@@ -88,7 +104,31 @@ acce --self-check
 acce --runtime-contract
 ```
 
-### Command-line decision evaluation
+## First decision
+
+The repository includes a vendor-neutral, non-production request and registry example so a new user can execute the core decision flow immediately after installation.
+
+Run:
+
+```bash
+acce --run-decision \
+  --request examples/request.json \
+  --registry examples/registry.json
+```
+
+The example contains one local model route and produces an offline execution plan. ACCE does not execute the model or any external action.
+
+The same example can be used for adaptive shadow evaluation:
+
+```bash
+acce --run-adaptive-shadow \
+  --request examples/request.json \
+  --registry examples/registry.json
+```
+
+See [Input Contract](docs/input-contract.md) for the request and registry structure and for the distinction between normal and production registries.
+
+## Command-line decision evaluation
 
 ACCE keeps decision inputs explicit and installation-specific. A decision request and registry are supplied by the host; ACCE does not embed a machine-specific model inventory.
 
@@ -110,9 +150,21 @@ Validate a production registry:
 acce --validate-production-registry --registry PATH
 ```
 
-The CLI intentionally keeps `--request` and `--registry` optional at argument-parsing time because they are conditional inputs: they are required only by commands that consume them. ACCE validates those dependencies at runtime and reports the missing option explicitly. This follows Python's `argparse` model for optional flags and avoids using required optional arguments as a substitute for command-specific validation.
+Replace `PATH` with an actual file path. The literal string `PATH` is documentation notation, not a file.
+
+The CLI intentionally keeps `--request` and `--registry` optional at argument-parsing time because they are conditional inputs: they are required only by commands that consume them. ACCE validates those dependencies at runtime and reports the missing option explicitly. This keeps command-specific requirements explicit without making unrelated commands depend on decision inputs.
 
 The package requires Python 3.10 or newer. The deterministic test suite does not require external provider connectivity.
+
+## Production registry
+
+Production registry validation is intentionally stricter than the normal decision registry.
+
+A production registry must represent trusted, measured inventory and satisfy the complete production contract. Placeholder values are not accepted, and production validation does not itself enable production routing.
+
+Do not use `examples/registry.json` as a production inventory. It is deliberately a minimal local example for offline evaluation.
+
+See [Input Contract](docs/input-contract.md) for the production validation requirements.
 
 ## Development validation
 

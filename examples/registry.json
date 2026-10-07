@@ -1,0 +1,23 @@
+{
+  "snapshot_id": "example-registry-001",
+  "instances": [
+    {
+      "route_id": "local-text-generation",
+      "capability_id": "text-generation",
+      "instance_id": "local-example",
+      "provider_id": "local-provider",
+      "resource_type": "local_model",
+      "supported_task_classes": [
+        "general"
+      ],
+      "availability": "available",
+      "quality_score": 0.8,
+      "estimated_latency_ms": 500,
+      "estimated_cloud_cost_usd": 0.0,
+      "model_used": "example-local-model",
+      "quota_metered": false,
+      "monetary_metered": false,
+      "context_window_tokens": 32768
+    }
+  ]
+}
