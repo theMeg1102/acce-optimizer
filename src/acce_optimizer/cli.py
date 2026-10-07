@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.run_decision:
-        require_files(args.request, args.registry)
+        require_files(("--request", args.request), ("--registry", args.registry))
         plan = run_decision(
             request_path=args.request,
             registry_path=args.registry,
