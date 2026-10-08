@@ -1,0 +1,39 @@
+{
+  "name": "openclaw-plugin-acce-optimizer",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "openclaw": ">=2026.9.8 <2026.10.0"
+  },
+  "devDependencies": {
+    "@openclaw/plugin-inspector": "0.3.26",
+    "openclaw": "2026.9.8",
+    "typescript": "7.0.2",
+    "vitest": "^3.2.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --config ./vitest.config.ts",
+    "plugin:validate": "npm run build && plugin-inspector ci --no-openclaw --runtime --mock-sdk --allow-execute --author-facing"
+  },
+  "openclaw": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "runtimeExtensions": [
+      "./dist/index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.9.8 <2026.10.0"
+    },
+    "build": {
+      "openclawVersion": "2026.9.8"
+    }
+  }
+}

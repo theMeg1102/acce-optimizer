@@ -1,0 +1,24 @@
+{
+  "id": "acce-optimizer",
+  "name": "ACCE Optimizer",
+  "description": "Governed adaptive model routing, cost optimization, quota preservation, and context-aware execution planning for OpenClaw.",
+  "version": "0.1.0",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": ["shadow"],
+        "default": "shadow"
+      },
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      }
+    }
+  }
+}
