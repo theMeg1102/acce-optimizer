@@ -12,6 +12,7 @@
     "openclaw": ">=2026.9.8 <2026.10.0"
   },
   "devDependencies": {
+    "@openclaw/plugin-inspector": "0.3.26",
     "openclaw": "2026.9.8",
     "typescript": "7.0.2",
     "vitest": "^3.2.0"
@@ -19,11 +20,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run --config ./vitest.config.ts",
-    "plugin:validate": "npm run build && node ./scripts/validate-runtime.mjs"
+    "plugin:validate": "npm run build && plugin-inspector ci --no-openclaw --runtime --mock-sdk --allow-execute"
   },
   "openclaw": {
-    "extensions": ["./src/index.ts"],
-    "runtimeExtensions": ["./dist/index.js"],
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "runtimeExtensions": [
+      "./dist/index.js"
+    ],
     "compat": {
       "pluginApi": ">=2026.9.8 <2026.10.0"
     },
