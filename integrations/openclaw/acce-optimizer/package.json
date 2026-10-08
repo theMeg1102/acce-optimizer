@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run --config ./vitest.config.ts",
-    "plugin:validate": "npm run build && plugin-inspector ci --no-openclaw --runtime --mock-sdk --allow-execute"
+    "plugin:validate": "npm run build && plugin-inspector ci --no-openclaw --runtime --mock-sdk --allow-execute --author-facing"
   },
   "openclaw": {
     "extensions": [
