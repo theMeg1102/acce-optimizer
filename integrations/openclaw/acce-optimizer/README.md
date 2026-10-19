@@ -44,3 +44,15 @@ The integration is validated as a hook-only OpenClaw plugin. Validation confirms
 ## Next integration phase
 
 The next phase will connect the shadow hook to ACCE's public `DecisionService.decide(request)` contract through an explicit adapter boundary. The adapter must preserve ACCE's governance, quota, context, and production-routing constraints and must remain non-mutating while shadow validation is in progress.
+
+
+## Governed discovery foundation
+
+`src/discovery.ts` now provides deterministic inventory primitives for normalized model observations from OpenClaw, Ollama, configured providers, and custom providers:
+
+- repeated discovery merges sources/capabilities and retains first-seen timestamps, captured telemetry, and explicit user-added state;
+- a new model starts as `DISCOVERED`; telemetry capture advances its evidence state without enabling a route;
+- adding a discovered model requires an explicit `markModelUserAdded` call;
+- every inventory record hard-codes `productionEligible: false`. Production eligibility remains owned by ACCE's authoritative registry/governance path.
+
+**Integration boundary:** these are tested domain primitives, not yet a live catalog poller or Settings button. A catalog reader must supply observations through an authorized OpenClaw interface (or a narrowly scoped read-only bridge); this plugin must not assume arbitrary Gateway methods are callable from an untrusted plugin. Telemetry collection and durable storage/UI orchestration remain follow-on integration work. No production routing is enabled.
