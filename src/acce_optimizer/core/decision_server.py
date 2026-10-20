@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hashlib
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -18,7 +19,8 @@ from urllib.parse import urlparse
 from .io import read_json
 from .models import DecisionRequest
 from .registry import CapabilityRegistry
-from .runtime import DecisionService
+from .runtime import DecisionService, QuotaPolicy
+from .trusted_state import MonthlyUsageLedger, TrustedRuntimeState
 
 MAX_BODY_BYTES = 256 * 1024
 
@@ -85,6 +87,25 @@ def _store_observations(payload: Any, observations_path: Path) -> dict[str, int]
     temporary.replace(observations_path)
     return {"accepted": len(accepted)}
     
+def _load_trusted_state() -> TrustedRuntimeState | None:
+    telemetry_raw = os.environ.get("ACCE_TRUSTED_STATE_TELEMETRY_PATH", "").strip()
+    ledger_raw = os.environ.get("ACCE_USAGE_LEDGER_PATH", "").strip()
+    if not telemetry_raw or not ledger_raw:
+        return None
+    telemetry_path = Path(telemetry_raw).expanduser().resolve()
+    ledger_path = Path(ledger_raw).expanduser().resolve()
+    if not telemetry_path.is_file():
+        return None
+    budget = float(os.environ.get("ACCE_MONTHLY_CLOUD_BUDGET_USD", "20"))
+    period = os.environ.get("ACCE_BUDGET_PERIOD", "").strip() or datetime.now(timezone.utc).strftime("%Y-%m")
+    try:
+        ledger = MonthlyUsageLedger(ledger_path, period=period, budget_usd=budget)
+        return TrustedRuntimeState.from_files(ledger=ledger, telemetry_path=telemetry_path)
+    except Exception:
+        # Stale or malformed trusted observations must fail closed to local-only.
+        return None
+
+
 def _decision(payload: Any, registry_path: Path, observations_path: Path, *, require_production: bool = True) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("request body must be a JSON object")
@@ -92,7 +113,23 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
     if not isinstance(request, dict):
         raise ValueError("request field must be a JSON object")
     registry = _load_registry(registry_path, observations_path, require_production=require_production)
-    result = DecisionService(registry=registry).adaptive_decision(DecisionRequest.from_mapping(request))
+    trusted_state = _load_trusted_state()
+    request_data = dict(request)
+    constraints = request_data.get("constraints")
+    constraints = dict(constraints) if isinstance(constraints, dict) else {}
+    if trusted_state is None:
+        # Do not invent live quota, spend, or context telemetry. Without a fresh
+        # trusted state snapshot, explicitly disallow external routes and cloud cost.
+        constraints["external_network_allowed"] = False
+        constraints["max_cloud_cost_usd"] = 0
+    request_data["constraints"] = constraints
+    service = (
+        DecisionService(registry=registry, trusted_state=trusted_state)
+        if trusted_state is not None
+        else DecisionService(registry=registry, quota_policy=QuotaPolicy(remaining_fraction=0.0))
+    )
+    result = service.adaptive_decision(DecisionRequest.from_mapping(request_data))
+    result["policy_mode"] = "trusted_state" if trusted_state is not None else "local_only_no_trusted_state"
     selected = result.get("selected_route")
     # Only an actual governed adaptive-graph selection may override OpenClaw.
     # The compatibility plan is returned for diagnosis/fallback, not applied.
@@ -106,6 +143,7 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
             "selected_route": None,
             "providerOverride": None,
             "modelOverride": None,
+            "policy_mode": result.get("policy_mode"),
         }
     return {
         "decision_id": result.get("decision_id"),
@@ -121,6 +159,7 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
         "engine": result.get("decision_engine"),
         "registry_snapshot_id": result.get("registry_snapshot_id"),
         "policy_snapshot_id": result.get("policy_snapshot_id"),
+        "policy_mode": result.get("policy_mode"),
     }
 
 
