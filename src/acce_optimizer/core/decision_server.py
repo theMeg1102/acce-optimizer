@@ -92,7 +92,7 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path) -> dic
     if not isinstance(request, dict):
         raise ValueError("request field must be a JSON object")
     registry = _load_registry(registry_path, observations_path)
-    result = DecisionService(registry=registry).decide(DecisionRequest.from_mapping(request))
+    result = DecisionService(registry=registry).adaptive_decision(DecisionRequest.from_mapping(request))
     selected = result.get("selected_route")
     if not isinstance(selected, dict):
         return {
