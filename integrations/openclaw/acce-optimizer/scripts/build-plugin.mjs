@@ -42,7 +42,7 @@ try {
     const generatedManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     generatedManifest.configSchema = authoredManifest.configSchema;
     generatedManifest.uiHints = authoredManifest.uiHints;
-    writeFileSync(manifestPath, `${JSON.stringify(generatedManifest, null, 2)}\\n`, { mode: 0o644 });
+    writeFileSync(manifestPath, `${JSON.stringify(generatedManifest, null, 2)}\n`, { mode: 0o644 });
   }
 } finally {
   rmSync(isolatedHome, { recursive: true, force: true });
