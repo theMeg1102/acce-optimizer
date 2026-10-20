@@ -15,6 +15,8 @@ type AccePluginConfig = {
   mode?: "shadow" | "adaptive";
   decisionServiceUrl?: string;
   decisionServiceToken?: string;
+  allowExternalNetwork?: boolean;
+  maxCloudCostUsd?: number;
   autoDiscoverOnStartup?: boolean;
   ollamaUrl?: string;
   inventoryPath?: string;
@@ -87,8 +89,8 @@ export default defineFeaturePlugin({
           profile: "balanced_local_first",
           constraints: {
             privacy_level: "unknown",
-            external_network_allowed: true,
-            max_cloud_cost_usd: 0,
+            external_network_allowed: config.allowExternalNetwork === true,
+            max_cloud_cost_usd: config.maxCloudCostUsd ?? 0,
             max_latency_ms: 120000,
             min_quality_score: 0,
             search_budget: { max_candidate_routes: 100 },
@@ -112,7 +114,8 @@ export default defineFeaturePlugin({
           routeId: decision.selected_route?.route_id ?? null,
           provider: decision.providerOverride,
           model: decision.modelOverride,
-          engine: decision.engine ?? "authoritative",
+          engine: decision.engine ?? "adaptive_graph",
+          policyMode: decision.policy_mode ?? "unknown",
         }));
         return {
           providerOverride: decision.providerOverride,
