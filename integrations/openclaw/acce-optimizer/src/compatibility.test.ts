@@ -37,6 +37,13 @@ describe("OpenClaw 2026.10.5 compatibility metadata", () => {
     expect(packageJson.openclaw.build.openclawVersion).toBe("2026.10.5");
   });
 
+  it("declares the decision bridge and makes adaptive graph routing the default", () => {
+    expect(pluginManifest.configSchema.properties.mode.default).toBe("adaptive");
+    expect(pluginManifest.configSchema.properties.mode.enum).toEqual(["adaptive", "shadow"]);
+    expect(pluginManifest.configSchema.properties.decisionServiceUrl).toBeDefined();
+    expect(pluginManifest.configSchema.properties.decisionServiceToken).toBeDefined();
+  });
+
   it("declares both the source entry and compiled runtime entry", () => {
     expect(packageJson.openclaw.extensions).toContain("./src/index.ts");
     expect(packageJson.openclaw.runtimeExtensions).toContain("./dist/index.js");
