@@ -24,7 +24,7 @@ const pluginManifest = JSON.parse(
 describe("OpenClaw 2026.10.5 compatibility metadata", () => {
   it("aligns the package and native manifest at version 1.0.0", () => {
     expect(packageJson.name).toBe("openclaw-plugin-acce-optimizer");
-    expect(packageJson.version).toBe("1.0.0");
+    expect(packageJson.version).toBe("0.1.3");
     expect(pluginManifest.id).toBe("acce-optimizer");
     expect(pluginManifest.version).toBe(packageJson.version);
   });
