@@ -1,6 +1,6 @@
 # ACCE Optimizer OpenClaw Integration
 
-Native OpenClaw adapter for ACCE Optimizer. Version 0.1.3 is being adapted and validated against **OpenClaw 2026.10.5**. This candidate declares compatibility with that exact host version only (`>=2026.10.5 <2026.10.6`) until later versions are independently tested. It remains **shadow-only**: it never overrides the selected provider or model.
+Native OpenClaw adapter for ACCE Optimizer. This integration branch targets **OpenClaw 2026.10.5** (`>=2026.10.5 <2026.10.6`). In `adaptive` mode, the plugin delegates selection to the existing Python `DecisionService.adaptive_decision()` graph engine and returns its governed `providerOverride` / `modelOverride` through the supported `before_model_resolve` hook. `shadow` mode remains available for non-mutating observation.
 
 ## Discovery behavior
 
@@ -19,7 +19,9 @@ Configure these fields in OpenClaw → Settings → Plugins → ACCE Optimizer:
 | Field | Default | Purpose |
 | --- | --- | --- |
 | `enabled` | `true` | Enable the plugin |
-| `mode` | `shadow` | Non-mutating mode; no production routing |
+| `mode` | `adaptive` | `adaptive` applies the governed A* graph decision; `shadow` observes only |
+| `decisionServiceUrl` | unset | Private HTTP bridge URL to the Python ACCE DecisionService; required for adaptive routing |
+| `decisionServiceToken` | unset | Bearer token for the bridge when it is bound beyond loopback |
 | `autoDiscoverOnStartup` | `true` | Run initial discovery only when inventory is empty |
 | `ollamaUrl` | `http://127.0.0.1:11434` | Explicit Ollama base URL reachable from the Gateway process |
 | `inventoryPath` | `~/.openclaw/acce-optimizer-data/inventory.json` | Private durable inventory path |
@@ -27,6 +29,23 @@ Configure these fields in OpenClaw → Settings → Plugins → ACCE Optimizer:
 For Docker deployments where Ollama runs on the host, configure a URL reachable from the container, for example `http://host.docker.internal:11434`. The plugin does not scan the network or guess alternative endpoints. An unavailable endpoint leaves the inventory unchanged and is reported in Gateway logs.
 
 The inventory is written atomically with file permissions `0600` and parent directory permissions `0700`. Invalid or oversized inventory files are rejected rather than silently reset.
+
+## Connect the existing Python decision engine
+
+The OpenClaw plugin is Node.js and the canonical graph engine is Python. They are connected by a small standard-library HTTP bridge; the plugin does not reimplement or fork the graph algorithm.
+
+Install the repository's Python package in the ACCE runtime environment, then start the bridge against the operator-maintained registry:
+
+    export ACCE_REGISTRY_PATH=/absolute/path/to/registry.json
+    export ACCE_DECISION_BIND=127.0.0.1
+    export ACCE_DECISION_PORT=18791
+    acce-decision-server
+
+If the Gateway runs in Docker and the bridge runs on the Aurora host, bind only to a private host interface reachable from that container, set a strong ACCE_DECISION_TOKEN, and firewall port 18791 to the Docker network. Do not expose the bridge publicly; it uses plain HTTP and bearer-token authentication, not TLS. Configure decisionServiceUrl to that reachable address and decisionServiceToken to the same token. A loopback URL inside the Gateway container points to the container itself, not the host.
+
+The bridge exposes GET /health, POST /v1/decide, and POST /v1/observations. It reads the operator-owned registry for every decision and calls DecisionService.adaptive_decision(). Observations are stored separately at ACCE_OBSERVATIONS_PATH (default: acce-discovery-observations.json beside the registry), atomically with private file permissions. Only measured latency is overlaid onto existing matching routes; new inventory entries are never promoted to production routes.
+
+For a safe rollback, set mode to shadow or remove decisionServiceUrl. When the bridge is not configured or is unavailable, the plugin fails open to OpenClaw's configured model.
 
 ## Manual refresh
 
@@ -44,8 +63,9 @@ The command reports discovered, added, refreshed, telemetry-captured, and teleme
 - Telemetry is collected only where the model's reported capabilities support the configured probe. Cloud models are left pending.
 - Telemetry stores measurement evidence and aggregate timings, not generated response text.
 - The coordinator preserves captured evidence, continues when an individual telemetry probe fails, and persists only after the catalog has completed successfully.
-- Every inventory record has `productionEligible: false`; the refresh result always reports `productionEligible: 0`.
-- The discovery feature does not connect to ACCE's authoritative production routing decision path and does not change OpenClaw's selected model.
+- Every inventory record remains `productionEligible: false`; discovery alone never authorizes a new route.
+- Captured `latencyMs` telemetry is sent to the decision bridge as minimized evidence. The bridge updates latency estimates only for already operator-configured registry routes whose provider/model identifiers match; it never auto-adds a route or invents quality, privacy, cost, or quota metadata.
+- Adaptive selection uses the existing Python graph search and route-governance checks. If the bridge is unavailable, the request is invalid, or no admissible adaptive route exists, the hook leaves OpenClaw's configured model unchanged. No prompt, attachments, history, or session identifier is sent to the bridge.
 
 ## OpenClaw compatibility and permissions
 
@@ -72,7 +92,7 @@ The dashboard refresh surface requires the authenticated operator's `operator.ad
 
 ## Validation
 
-The CI pipeline runs the plugin tests, TypeScript build, and Plugin Inspector validation against the pinned OpenClaw 2026.10.5 SDK/CLI. Tests cover catalog normalization, telemetry handling, durable private persistence, repeated discovery, first-run policy, and the compatibility metadata. Live deployment verification is still required before release, including plugin discovery/loading, native UI activation, and preservation of existing data/settings.
+The CI pipeline runs the plugin tests, TypeScript build, and Plugin Inspector validation against the pinned OpenClaw 2026.10.5 SDK/CLI. The Python tests cover the decision bridge and telemetry-to-route integration; the plugin tests cover bridge requests, fail-open behavior, and evidence sync. Live deployment verification is still required before release, including service reachability from the Gateway container, plugin discovery/loading, native UI activation, route selection against the actual registry, and preservation of existing data/settings.
 
 
 ## Safe withdrawal and upgrade validation
