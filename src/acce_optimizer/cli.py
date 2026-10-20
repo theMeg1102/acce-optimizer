@@ -43,7 +43,7 @@ def build_self_check() -> dict:
         "learning": "evidence_and_similarity_gated_preferences",
         "openclaw_integration": "decision_bridge_with_minimized_observations",
         "openclaw_session_mutation": False,
-        "production_routing": "disabled",
+        "production_routing": "available_through_governed_decision_bridge",
         "model_execution_by_shadow": False,
         "conversation_content_recorded_by_shadow": False,
         "quota_values_inferred": False,
