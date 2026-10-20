@@ -38,7 +38,7 @@ export default defineControlUiPlugin({
         const note = document.createElement("p");
         note.className = "acce-discovery-note";
         note.textContent =
-          "Configure the decision bridge URL/token and Ollama endpoint in OpenClaw → Settings → Plugins → ACCE Optimizer. Adaptive mode uses the existing Python graph engine; newly discovered models are never auto-promoted into the governed registry.";
+          "Configure the decision bridge URL/token, Ollama endpoint, and cloud-route policy in OpenClaw → Settings → Plugins → ACCE Optimizer. Cloud routes remain disabled unless fresh trusted quota/context state and the usage ledger are configured on the bridge. Newly discovered models are never auto-promoted into the governed registry.";
 
         let disposed = false;
         const updateAvailability = () => {
