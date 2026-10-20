@@ -94,6 +94,10 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path) -> dic
     registry = _load_registry(registry_path, observations_path)
     result = DecisionService(registry=registry).adaptive_decision(DecisionRequest.from_mapping(request))
     selected = result.get("selected_route")
+    # Only an actual governed adaptive-graph selection may override OpenClaw.
+    # The compatibility plan is returned for diagnosis/fallback, not applied.
+    if result.get("decision_engine") != "adaptive_graph" or result.get("routing_applied") is not True:
+        selected = None
     if not isinstance(selected, dict):
         return {
             "decision_id": result.get("decision_id"),
