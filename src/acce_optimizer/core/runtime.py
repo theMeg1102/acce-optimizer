@@ -213,12 +213,15 @@ class DecisionService:
         )
         adaptive_route_id = comparison.get("adaptive_route_id")
         if not isinstance(adaptive_route_id, str) or not adaptive_route_id:
-            return {
+            fallback_plan = {
                 **authoritative_plan,
                 "decision_engine": "authoritative_fallback",
                 "adaptive_comparison": comparison,
                 "routing_applied": False,
             }
+            if self._decision_log_path is not None:
+                append_decision_log(self._decision_log_path, fallback_plan)
+            return fallback_plan
 
         candidates = {
             route.route_id: route
@@ -229,12 +232,15 @@ class DecisionService:
         if selected is None:
             # Defensive consistency check: graph search may only select a route
             # present in the validated registry snapshot.
-            return {
+            fallback_plan = {
                 **authoritative_plan,
                 "decision_engine": "authoritative_fallback",
                 "adaptive_comparison": comparison,
                 "routing_applied": False,
             }
+            if self._decision_log_path is not None:
+                append_decision_log(self._decision_log_path, fallback_plan)
+            return fallback_plan
 
         decision_material = {
             "request": normalized_request.normalized(),
@@ -245,7 +251,7 @@ class DecisionService:
         decision_id = hashlib.sha256(
             json.dumps(decision_material, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()[:24]
-        return {
+        adaptive_plan = {
             **authoritative_plan,
             "decision_id": decision_id,
             "decision_engine": "adaptive_graph",
@@ -261,6 +267,9 @@ class DecisionService:
             },
             "routing_applied": True,
         }
+        if self._decision_log_path is not None:
+            append_decision_log(self._decision_log_path, adaptive_plan)
+        return adaptive_plan
 
     def shadow_adaptive_decision(
         self,
