@@ -30,7 +30,7 @@ def build_self_check() -> dict:
         "namespace": "acce_optimizer.core",
         "compatibility_entrypoint": "acce_optimizer",
         "phase": "Adaptive Routing Validation",
-        "status": "adaptive_shadow_ready_production_routing_disabled",
+        "status": "adaptive_graph_ready",
         "runtime_mode": "offline_reusable_runtime",
         "public_contract": "DecisionService.decide(request)",
         "contract_id": DecisionService.contract_id,
