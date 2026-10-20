@@ -19,7 +19,7 @@
     "esbuild": "0.28.2"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && openclaw plugins build",
+    "build": "tsc -p tsconfig.json && node ./scripts/build-plugin.mjs",
     "test": "vitest run --config ./vitest.config.ts",
     "plugin:validate": "npm run build && plugin-inspector ci --no-openclaw --runtime --mock-sdk --allow-execute --author-facing"
   },
