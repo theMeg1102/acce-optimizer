@@ -4,7 +4,7 @@ import { defineFeatureContract } from "openclaw/plugin-sdk/feature-contract";
 export const contract = defineFeatureContract({
   pluginId: "acce-optimizer",
   operations: {
-    refresh-discovery: {
+    "refresh-discovery": {
       kind: "action",
       description: "Refresh the configured Ollama model catalog and retry pending telemetry.",
       input: Type.Object({}, { additionalProperties: false }),
