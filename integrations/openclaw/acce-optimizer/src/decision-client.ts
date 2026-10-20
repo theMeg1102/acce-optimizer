@@ -30,7 +30,19 @@ export function createDecisionClient(params: {
     }
     endpoint.pathname = `${endpoint.pathname.replace(/\/$/u, "")}/v1/decide`;
   }
-  const fetchImpl = params.fetchImpl ?? fetch;\n  const observationsEndpoint = endpoint ? new URL(endpoint.href) : undefined;\n  if (observationsEndpoint) observationsEndpoint.pathname = observationsEndpoint.pathname.replace(/\\/v1\\/decide$/u, "/v1/observations");
+  const fetchImpl = params.fetchImpl ?? fetch;
+  const observationsEndpoint = endpoint ? new URL(endpoint.href) : undefined;
+  if (observationsEndpoint) {
+    observationsEndpoint.pathname = observationsEndpoint.pathname.replace(/\/v1\/decide$/u, "/v1/observations");
+  }
+
+  function headers(): Record<string, string> {
+    return {
+      accept: "application/json",
+      "content-type": "application/json",
+      ...(params.bearerToken ? { authorization: `Bearer ${params.bearerToken}` } : {}),
+    };
+  }
 
   return {
     configured: Boolean(endpoint),
@@ -41,11 +53,7 @@ export function createDecisionClient(params: {
       try {
         const response = await fetchImpl(observationsEndpoint, {
           method: "POST",
-          headers: {
-            accept: "application/json",
-            "content-type": "application/json",
-            ...(params.bearerToken ? { authorization: `Bearer ${params.bearerToken}` } : {}),
-          },
+          headers: headers(),
           body: JSON.stringify({ snapshot }),
           signal: controller.signal,
         });
@@ -62,11 +70,7 @@ export function createDecisionClient(params: {
       try {
         const response = await fetchImpl(endpoint, {
           method: "POST",
-          headers: {
-            accept: "application/json",
-            "content-type": "application/json",
-            ...(params.bearerToken ? { authorization: `Bearer ${params.bearerToken}` } : {}),
-          },
+          headers: headers(),
           body: JSON.stringify({ request }),
           signal: controller.signal,
         });
