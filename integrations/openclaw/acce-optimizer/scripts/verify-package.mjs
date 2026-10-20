@@ -17,7 +17,8 @@ try {
 } catch {
   throw new Error("npm pack --dry-run did not return valid JSON");
 }
-const files = new Set((pack?.[0]?.files ?? []).map((file) => file.path));
+const packedFiles = pack?.[0]?.files ?? [];
+const files = new Set(packedFiles.map((file) => String(file.path ?? file).replace(/^package\\//u, "")));
 const required = [
   "package.json",
   "openclaw.plugin.json",
@@ -32,7 +33,7 @@ if (uiAssets.length === 0) {
   missing.push("dist/control-ui/<generated JavaScript/CSS assets>");
 }
 if (missing.length > 0) {
-  throw new Error(`Packed plugin is incomplete; missing: ${missing.join(", ")}`);
+  throw new Error(`Packed plugin is incomplete; missing: ${missing.join(", ")}. npm pack metadata: ${JSON.stringify({ entryKeys: Object.keys(pack?.[0] ?? {}), fileCount: packedFiles.length, firstFiles: packedFiles.slice(0, 12) })}`);
 }
 
 console.log(JSON.stringify({
