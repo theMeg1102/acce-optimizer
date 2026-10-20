@@ -10,7 +10,7 @@ function response(status: number, payload: unknown): Response {
 
 describe("configured Ollama catalog reader", () => {
   it("reads only the explicitly configured /api/tags endpoint and normalizes model rows", async () => {
-    const fetchImpl = vi.fn(async () => response(200, {
+    const fetchImpl = vi.fn(async (_input: string | URL, _init?: RequestInit) => response(200, {
       models: [
         { name: "qwen2.5:7b", size: 123, digest: "abc", modified_at: "2026-10-19T10:00:00Z" },
         { name: "qwen2.5:7b", size: 456 },
