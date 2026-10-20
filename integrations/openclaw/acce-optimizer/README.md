@@ -9,6 +9,7 @@ Native OpenClaw adapter for ACCE Optimizer. Version 0.1.2 targets OpenClaw 2026.
 - If an inventory already exists, startup discovery skips it. Restarting OpenClaw does not automatically recalibrate existing records.
 - Set `autoDiscoverOnStartup: false` to disable the first-run behavior.
 - The `ACCE Optimizer` Control UI tab provides a **Recalibrate discovery now** button. It refreshes the configured Ollama catalog and retries telemetry that is still pending.
+- Because this is a user-installed native UI plugin, enable **Settings → Labs → Custom plugin UI** in OpenClaw. That experimental setting is off by default. The first-run service and CLI still work when custom UI is disabled.
 - The CLI remains available for explicit operator-controlled refreshes.
 
 ## Configuration
