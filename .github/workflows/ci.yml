@@ -39,3 +39,12 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run plugin:validate
+      - name: Pack OpenClaw plugin candidate
+        run: npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Upload testable plugin package
+        uses: actions/upload-artifact@v4
+        with:
+          name: acce-optimizer-openclaw-1.0.0-${{ github.sha }}
+          path: ${{ runner.temp }}/openclaw-plugin-acce-optimizer-1.0.0.tgz
+          if-no-files-found: error
+          retention-days: 14
