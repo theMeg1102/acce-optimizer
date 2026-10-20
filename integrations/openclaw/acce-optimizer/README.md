@@ -22,6 +22,8 @@ Configure these fields in OpenClaw → Settings → Plugins → ACCE Optimizer:
 | `mode` | `adaptive` | `adaptive` applies the governed A* graph decision; `shadow` observes only |
 | `decisionServiceUrl` | unset | Private HTTP bridge URL to the Python ACCE DecisionService; required for adaptive routing |
 | `decisionServiceToken` | unset | Bearer token for the bridge when it is bound beyond loopback |
+| `allowExternalNetwork` | `false` | Explicitly allow cloud routes, subject to fresh trusted state and route governance |
+| `maxCloudCostUsd` | `0` | Per-request cloud cost ceiling; cloud routes stay blocked at zero |
 | `autoDiscoverOnStartup` | `true` | Run initial discovery only when inventory is empty |
 | `ollamaUrl` | `http://127.0.0.1:11434` | Explicit Ollama base URL reachable from the Gateway process |
 | `inventoryPath` | `~/.openclaw/acce-optimizer-data/inventory.json` | Private durable inventory path |
@@ -44,6 +46,8 @@ Install the repository's Python package in the ACCE runtime environment, then st
 If the Gateway runs in Docker and the bridge runs on the Aurora host, bind only to a private host interface reachable from that container, set a strong ACCE_DECISION_TOKEN, and firewall port 18791 to the Docker network. Do not expose the bridge publicly; it uses plain HTTP and bearer-token authentication, not TLS. Configure decisionServiceUrl to that reachable address and decisionServiceToken to the same token. A loopback URL inside the Gateway container points to the container itself, not the host.
 
 The bridge exposes GET /health, POST /v1/decide, and POST /v1/observations. It reads the operator-owned registry for every decision, requires the strict production-registry contract, and calls DecisionService.adaptive_decision(). An example or incomplete registry is rejected rather than activated. Observations are stored separately at ACCE_OBSERVATIONS_PATH (default: acce-discovery-observations.json beside the registry), atomically with private file permissions. Only measured latency is overlaid onto existing matching routes; new inventory entries are never promoted to production routes.
+
+Cloud routes are fail-closed by default. They require `allowExternalNetwork: true`, a positive `maxCloudCostUsd`, and fresh trusted quota/context state on the bridge. Configure `ACCE_TRUSTED_STATE_TELEMETRY_PATH` and `ACCE_USAGE_LEDGER_PATH` to existing, authorized state files; optionally set `ACCE_MONTHLY_CLOUD_BUDGET_USD` and `ACCE_BUDGET_PERIOD`. The bridge validates telemetry freshness using the existing `TrustedRuntimeState` contract. If either file is absent, stale, or invalid, the request is clamped to local-only with a zero cloud-cost ceiling. Do not fabricate these files or infer quota from model discovery.
 
 For a safe rollback, set mode to shadow or remove decisionServiceUrl. When the bridge is not configured or is unavailable, the plugin fails open to OpenClaw's configured model.
 
