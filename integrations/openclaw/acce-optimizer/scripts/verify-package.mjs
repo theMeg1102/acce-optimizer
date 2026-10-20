@@ -17,7 +17,8 @@ try {
 } catch {
   throw new Error("npm pack --dry-run did not return valid JSON");
 }
-const packedFiles = pack?.[0]?.files ?? [];
+const entry = Array.isArray(pack) ? pack[0] : pack;
+const packedFiles = entry?.files ?? [];
 const files = new Set(packedFiles.map((file) => String(file.path ?? file).replace(/^package\//u, "")));
 const required = [
   "package.json",
@@ -33,11 +34,11 @@ if (uiAssets.length === 0) {
   missing.push("dist/control-ui/<generated JavaScript/CSS assets>");
 }
 if (missing.length > 0) {
-  throw new Error(`Packed plugin is incomplete; missing: ${missing.join(", ")}. npm pack metadata: ${JSON.stringify({ entryKeys: Object.keys(pack?.[0] ?? {}), fileCount: packedFiles.length, firstFiles: packedFiles.slice(0, 12) })}`);
+  throw new Error(`Packed plugin is incomplete; missing: ${missing.join(", ")}. npm pack metadata: ${JSON.stringify({ entryKeys: Object.keys(entry ?? {}), fileCount: packedFiles.length, firstFiles: packedFiles.slice(0, 12) })}`);
 }
 
 console.log(JSON.stringify({
-  package: pack[0].filename,
+  package: entry.filename ?? `${entry.name ?? "plugin"}-${entry.version ?? "unknown"}`,
   packedFileCount: files.size,
   runtimeEntry: "present",
   manifest: "present",
