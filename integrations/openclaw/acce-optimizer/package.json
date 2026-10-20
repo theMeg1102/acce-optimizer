@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node ./scripts/build-plugin.mjs && node ./scripts/verify-build.mjs",
     "test": "vitest run --config ./vitest.config.ts",
-    "plugin:validate": "npm run build && plugin-inspector ci --no-openclaw --runtime --mock-sdk --allow-execute --author-facing"
+    "plugin:validate": "npm run build && plugin-inspector ci --no-openclaw --runtime --mock-sdk --allow-execute --author-facing && node ./scripts/verify-package.mjs"
   },
   "openclaw": {
     "extensions": [
