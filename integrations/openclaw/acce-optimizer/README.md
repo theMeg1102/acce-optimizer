@@ -1,6 +1,6 @@
 # ACCE Optimizer OpenClaw Integration
 
-Native OpenClaw adapter for ACCE Optimizer. Version 1.0.0 is being adapted and validated against **OpenClaw 2026.10.5**. This candidate declares compatibility with that exact host version only (`>=2026.10.5 <2026.10.6`) until later versions are independently tested. It remains **shadow-only**: it never overrides the selected provider or model.
+Native OpenClaw adapter for ACCE Optimizer. Version 0.1.3 is being adapted and validated against **OpenClaw 2026.10.5**. This candidate declares compatibility with that exact host version only (`>=2026.10.5 <2026.10.6`) until later versions are independently tested. It remains **shadow-only**: it never overrides the selected provider or model.
 
 ## Discovery behavior
 
@@ -49,7 +49,7 @@ The command reports discovered, added, refreshed, telemetry-captured, and teleme
 
 ## OpenClaw compatibility and permissions
 
-Version 1.0.0 is a compatibility candidate, not a stable release. Its package version is aligned across package.json and openclaw.plugin.json; the OpenClaw compatibility window remains limited to the tested 2026.10.5 patch.\n\nThe development branch pins the SDK, authoring CLI, build metadata, peer dependency, and `pluginApi` compatibility range to OpenClaw 2026.10.5. The range is deliberately exact to this patch (`>=2026.10.5 <2026.10.6`); do not widen it without CI validation and a live smoke test on the intended host. OpenClaw plugin APIs are experimental. Passing build and unit tests does not replace checking discovery, registration, UI activation, and data/settings migration on a 2026.10.5 Gateway.
+Version 0.1.3 is a compatibility candidate, not a stable release. Its package version is aligned across package.json and openclaw.plugin.json; the OpenClaw compatibility window remains limited to the tested 2026.10.5 patch.\n\nThe development branch pins the SDK, authoring CLI, build metadata, peer dependency, and `pluginApi` compatibility range to OpenClaw 2026.10.5. The range is deliberately exact to this patch (`>=2026.10.5 <2026.10.6`); do not widen it without CI validation and a live smoke test on the intended host. OpenClaw plugin APIs are experimental. Passing build and unit tests does not replace checking discovery, registration, UI activation, and data/settings migration on a 2026.10.5 Gateway.
 
 For non-bundled installations, the host must explicitly grant conversation-hook access:
 
