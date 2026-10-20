@@ -47,7 +47,9 @@ def test_discovery_telemetry_updates_only_matching_configured_route(tmp_path: Pa
     assert route["model_used"] == "example-local-model"
 
 
-def test_decision_bridge_uses_existing_graph_engine_and_returns_route(tmp_path: Path) -> None:
+def test_decision_bridge_uses_existing_graph_engine_and_returns_route(tmp_path: Path, monkeypatch) -> None:
+    decision_log = tmp_path / "decisions.jsonl"
+    monkeypatch.setenv("ACCE_DECISION_LOG_PATH", str(decision_log))
     registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
     observations_path = tmp_path / "observations.json"
     request = {
@@ -75,6 +77,10 @@ def test_decision_bridge_uses_existing_graph_engine_and_returns_route(tmp_path: 
     assert result["providerOverride"] == "local-provider"
     assert result["modelOverride"] == "example-local-model"
     assert result["selected_route"]["route_id"] == "local-text-generation"
+    log_entry = json.loads(decision_log.read_text(encoding="utf-8").splitlines()[0])
+    assert log_entry["decision_id"] == result["decision_id"]
+    assert "summary" not in log_entry["normalized_request"]
+    assert log_entry["selected_route"]["route_id"] == "local-text-generation"
 
 
 def test_bridge_rejects_non_production_registry_by_default(tmp_path: Path) -> None:
