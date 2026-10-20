@@ -11,5 +11,6 @@ requires-python = ">=3.10"
 classifiers = ["Development Status :: 3 - Alpha","Programming Language :: Python :: 3","Programming Language :: Python :: 3 :: Only"]
 [project.scripts]
 acce = "acce_optimizer.cli:main"
+acce-decision-server = "acce_optimizer.core.decision_server:main"
 [tool.setuptools.packages.find]
 where = ["src"]
