@@ -41,7 +41,7 @@ def build_self_check() -> dict:
         "governance_before_search": True,
         "resource_state": "immutable_quota_budget_snapshot",
         "learning": "evidence_and_similarity_gated_preferences",
-        "openclaw_integration": "read_only_observation_boundary",
+        "openclaw_integration": "decision_bridge_with_minimized_observations",
         "openclaw_session_mutation": False,
         "production_routing": "disabled",
         "model_execution_by_shadow": False,
