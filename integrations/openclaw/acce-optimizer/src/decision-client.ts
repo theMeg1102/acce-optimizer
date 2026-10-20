@@ -6,6 +6,7 @@ export type AcceDecision = {
   modelOverride?: string | null;
   selected_route?: { route_id?: string; provider_id?: string; model_used?: string } | null;
   engine?: string;
+  policy_mode?: string;
 };
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
