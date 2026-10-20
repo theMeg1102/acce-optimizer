@@ -44,6 +44,17 @@
       "decisionServiceToken": {
         "type": "string",
         "description": "Bearer token for the private ACCE DecisionService bridge. Keep secret."
+      },
+      "allowExternalNetwork": {
+        "type": "boolean",
+        "default": false,
+        "description": "Permit cloud routes only when fresh trusted quota/context state is configured on the ACCE bridge."
+      },
+      "maxCloudCostUsd": {
+        "type": "number",
+        "minimum": 0,
+        "default": 0,
+        "description": "Per-request cloud cost ceiling. Cloud routes remain disabled unless explicitly permitted and trusted state is available."
       }
     }
   },
@@ -75,6 +86,14 @@
       "label": "DecisionService bearer token",
       "sensitive": true,
       "help": "Required when the bridge binds beyond loopback."
+    },
+    "allowExternalNetwork": {
+      "label": "Allow external/cloud routes",
+      "help": "Off by default. The bridge still fails closed to local routes unless fresh trusted quota/context telemetry and a usage ledger are configured."
+    },
+    "maxCloudCostUsd": {
+      "label": "Maximum cloud cost per request",
+      "help": "USD ceiling for a single decision. This does not replace the monthly budget/usage ledger."
     }
   }
 }
