@@ -35,7 +35,7 @@ def test_discovery_telemetry_updates_only_matching_configured_route(tmp_path: Pa
     }
 
     result = _store_observations({"snapshot": snapshot}, observations_path)
-    registry = _load_registry(registry_path, observations_path)
+    registry = _load_registry(registry_path, observations_path, require_production=False)
 
     assert result == {"accepted": 2}
     assert len(registry.snapshot["instances"]) == 1
@@ -65,7 +65,7 @@ def test_decision_bridge_uses_existing_graph_engine_and_returns_route(tmp_path: 
         "governance": {"validation_required": True},
     }
 
-    result = _decision({"request": request}, registry_path, observations_path)
+    result = _decision({"request": request}, registry_path, observations_path, require_production=False)
 
     assert result["status"] == "execution_plan_ready"
     assert result["engine"] == "adaptive_graph"
