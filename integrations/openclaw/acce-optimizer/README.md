@@ -69,3 +69,8 @@ The next phase will connect the shadow hook to ACCE's public `DecisionService.de
 - the result always reports `productionEligible: 0`.
 
 Tests cover refresh merging, historical evidence retention, telemetry failure, and avoiding persistence of a partial catalog refresh. This is orchestration infrastructure, not yet a live OpenClaw Gateway adapter, durable production store, or Settings control. Those pieces must be connected before claiming end-to-end autodiscovery.
+
+
+### OpenClaw catalog adapter
+
+`src/openclaw-catalog-reader.ts` maps the official `models.list` response shape into normalized discovery rows, supports `all` and `configured` views, deduplicates provider/model identities, and rejects malformed responses. The adapter accepts an `AuthorizedGatewayReader` dependency rather than making a privileged request itself. Wire it only to an authenticated Gateway client or a narrowly scoped read-only bridge. The repository now tests this mapping independently, but the live authorized transport and durable store are not yet wired into plugin runtime or Settings.
