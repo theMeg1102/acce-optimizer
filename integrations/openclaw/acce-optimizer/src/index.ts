@@ -8,6 +8,7 @@ import { contract } from "./contract.js";
 import { createOllamaCatalogReader } from "./ollama-catalog-reader.js";
 import { createOllamaTelemetryBootstrap } from "./ollama-telemetry.js";
 import { createDecisionClient } from "./decision-client.js";
+import { deriveTaskProfile } from "./task-profile.js";
 
 type AccePluginConfig = {
   enabled?: boolean;
@@ -55,7 +56,7 @@ export default defineFeaturePlugin({
       bearerToken: config.decisionServiceToken ?? process.env.ACCE_DECISION_TOKEN,
     });
 
-    api.on("before_model_resolve", async (event, ctx) => {
+    api.on("before_model_resolve", async (event) => {
       if (!isEnabled(config)) return;
       const mode = config.mode ?? "adaptive";
       if (mode === "shadow") {
@@ -77,10 +78,11 @@ export default defineFeaturePlugin({
 
       // Never send prompt, attachments, history, or session identifiers to the bridge.
       try {
+        const taskProfile = deriveTaskProfile(event.prompt);
         const decision = await decisionClient.decide({
           request_id: "openclaw-model-selection",
           task_class: "general",
-          summary: "OpenClaw text-generation model selection",
+          summary: taskProfile.summary,
           required_capabilities: ["text-generation"],
           profile: "balanced_local_first",
           constraints: {
@@ -92,6 +94,7 @@ export default defineFeaturePlugin({
             search_budget: { max_candidate_routes: 100 },
             quota_budget: { remaining_fraction: 1 },
           },
+          urgency: taskProfile.urgency,
           governance: { validation_required: true },
         });
         if (decision?.status !== "execution_plan_ready" ||
@@ -196,6 +199,7 @@ export default defineFeaturePlugin({
         void (async () => {
           const storePath = defaultStorePath();
           const existing = await createJsonFileDiscoveryStore(storePath).load();
+          await syncDiscoveryEvidence(existing);
           if (!shouldRunInitialDiscovery({
             enabled: isEnabled(config),
             autoDiscoverOnStartup: config.autoDiscoverOnStartup !== false,
