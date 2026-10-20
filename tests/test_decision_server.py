@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from acce_optimizer.core.errors import ContractValidationError
-from acce_optimizer.core.decision_server import _decision, _load_registry, _store_observations
+from acce_optimizer.core.decision_server import _decision, _load_registry, _load_trusted_state, _store_observations
 
 
 def test_discovery_telemetry_updates_only_matching_configured_route(tmp_path: Path) -> None:
@@ -81,3 +81,11 @@ def test_bridge_rejects_non_production_registry_by_default(tmp_path: Path) -> No
     registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
     with pytest.raises(ContractValidationError, match="registry_mode must be production"):
         _decision({"request": {}}, registry_path, tmp_path / "observations.json")
+
+
+def test_missing_trusted_usage_ledger_fails_closed(monkeypatch, tmp_path: Path) -> None:
+    telemetry_path = tmp_path / "telemetry.json"
+    telemetry_path.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("ACCE_TRUSTED_STATE_TELEMETRY_PATH", str(telemetry_path))
+    monkeypatch.setenv("ACCE_USAGE_LEDGER_PATH", str(tmp_path / "missing-ledger.json"))
+    assert _load_trusted_state() is None
