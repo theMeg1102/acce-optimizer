@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 type PluginPackage = {
+  name: string;
+  version: string;
   peerDependencies: { openclaw: string };
   devDependencies: { openclaw: string };
   openclaw: {
@@ -15,8 +17,18 @@ type PluginPackage = {
 const packageJson = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ) as PluginPackage;
+const pluginManifest = JSON.parse(
+  readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"),
+) as { id: string; version: string };
 
 describe("OpenClaw 2026.10.5 compatibility metadata", () => {
+  it("aligns the package and native manifest at version 1.0.0", () => {
+    expect(packageJson.name).toBe("openclaw-plugin-acce-optimizer");
+    expect(packageJson.version).toBe("1.0.0");
+    expect(pluginManifest.id).toBe("acce-optimizer");
+    expect(pluginManifest.version).toBe(packageJson.version);
+  });
+
   it("pins SDK, peer dependency, and plugin API range to the validated host patch", () => {
     const exactHostRange = ">=2026.10.5 <2026.10.6";
     expect(packageJson.peerDependencies.openclaw).toBe(exactHostRange);
