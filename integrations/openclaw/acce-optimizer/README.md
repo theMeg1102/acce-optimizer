@@ -73,3 +73,18 @@ The dashboard refresh surface requires the authenticated operator's `operator.ad
 ## Validation
 
 The CI pipeline runs the plugin tests, TypeScript build, and Plugin Inspector validation against the pinned OpenClaw 2026.10.5 SDK/CLI. Tests cover catalog normalization, telemetry handling, durable private persistence, repeated discovery, first-run policy, and the compatibility metadata. Live deployment verification is still required before release, including plugin discovery/loading, native UI activation, and preservation of existing data/settings.
+
+
+## Safe withdrawal and upgrade validation
+
+For the Aurora OpenClaw 2026.10.5 migration, do not copy generated files directly into the active extension directory and do not use `openclaw plugins install acce-optimizer --force` as the first repair step.
+
+1. Record the current plugin registry/inspection output, config entry, and a checksum plus private backup of the inventory before changing active state.
+2. Use the supported reversible command `openclaw plugins disable acce-optimizer`. This changes enablement without removing the installed package or its configuration fields. Confirm the effective status and check whether compatibility warnings continue; disabling may not suppress cold-discovery diagnostics for an incompatible package.
+3. Rebuild and validate this branch against the pinned OpenClaw 2026.10.5 CLI. The build uses an isolated temporary OpenClaw state directory and checks that `dist/index.js`, generated manifest metadata, and native Control UI assets exist.
+4. Validate the packed artifact before installation. The official OpenClaw plugin installer should be used in the isolated test environment so its install registry/metadata is created through the supported lifecycle. Do not reactivate the live plugin until this test passes.
+5. Compare plugin settings and inventory before and after the test. The host-compatibility change does not intentionally change the inventory record schema. Never delete or regenerate the existing inventory to work around a migration warning.
+
+The plugin settings live in the OpenClaw config entry for `plugins.entries.acce-optimizer`; the model inventory is separate at the configured `inventoryPath` (default `~/.openclaw/acce-optimizer-data/inventory.json`). Keep both, along with Doctor captures and backups. Do not run `openclaw update repair`, `openclaw doctor --fix`, or a forced reinstall until the exact migration owner and affected state have been identified.
+
+The development branch intentionally does not claim the installation is repaired merely because CI passes. Before release, the isolated OpenClaw 2026.10.5 environment must confirm clean discovery, successful runtime registration, working Control UI refresh, no repeated plugin diagnostics, and unchanged inventory/settings. Then deploy the same validated artifact and retain a documented rollback copy.
