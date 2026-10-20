@@ -19,10 +19,10 @@ const packageJson = JSON.parse(
 ) as PluginPackage;
 const pluginManifest = JSON.parse(
   readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"),
-) as { id: string; version: string };
+) as { id: string; version: string; configSchema: { properties: Record<string, { default?: unknown; enum?: unknown[] }> } };
 
 describe("OpenClaw 2026.10.5 compatibility metadata", () => {
-  it("aligns the package and native manifest at version 1.0.0", () => {
+  it("aligns the package and native manifest at version 0.1.3", () => {
     expect(packageJson.name).toBe("openclaw-plugin-acce-optimizer");
     expect(packageJson.version).toBe("0.1.3");
     expect(pluginManifest.id).toBe("acce-optimizer");
