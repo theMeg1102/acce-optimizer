@@ -7,17 +7,23 @@ import { shouldRunInitialDiscovery } from "./autodiscovery-policy.js";
 import { contract } from "./contract.js";
 import { createOllamaCatalogReader } from "./ollama-catalog-reader.js";
 import { createOllamaTelemetryBootstrap } from "./ollama-telemetry.js";
+import { createDecisionClient } from "./decision-client.js";
 
 type AccePluginConfig = {
   enabled?: boolean;
-  mode?: "shadow";
+  mode?: "shadow" | "adaptive";
+  decisionServiceUrl?: string;
+  decisionServiceToken?: string;
   autoDiscoverOnStartup?: boolean;
   ollamaUrl?: string;
   inventoryPath?: string;
 };
 
 function isEnabled(config: AccePluginConfig): boolean {
-  return config.enabled === true && (config.mode === undefined || config.mode === "shadow");
+  // OpenClaw controls whether this plugin is loaded via plugins.entries.<id>.enabled.
+  // api.pluginConfig contains only the plugin-specific config object, so `enabled`
+  // is an optional plugin-level kill switch rather than a mirror of host enablement.
+  return config.enabled !== false && (config.mode === undefined || config.mode === "shadow" || config.mode === "adaptive");
 }
 
 function configuredOllamaUrl(config: AccePluginConfig): string {
