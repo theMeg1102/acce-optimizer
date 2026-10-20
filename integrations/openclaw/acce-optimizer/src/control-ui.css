@@ -1,0 +1,35 @@
+.acce-discovery-page {
+  display: grid;
+  gap: 16px;
+  max-width: 760px;
+  padding: 24px;
+  color: var(--text);
+}
+.acce-discovery-page h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+.acce-discovery-page p {
+  line-height: 1.55;
+}
+.acce-discovery-page button {
+  justify-self: start;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--accent-foreground, var(--text));
+  background: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.acce-discovery-page button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.acce-discovery-status {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.acce-discovery-note {
+  opacity: 0.8;
+}

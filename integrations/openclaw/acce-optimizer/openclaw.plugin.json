@@ -1,0 +1,60 @@
+{
+  "id": "acce-optimizer",
+  "name": "ACCE Optimizer",
+  "description": "Governed adaptive model routing, cost optimization, quota preservation, and context-aware execution planning for OpenClaw.",
+  "version": "0.1.2",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "shadow"
+        ],
+        "default": "shadow"
+      },
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "autoDiscoverOnStartup": {
+        "type": "boolean",
+        "default": true
+      },
+      "ollamaUrl": {
+        "type": "string",
+        "format": "uri",
+        "default": "http://127.0.0.1:11434"
+      },
+      "inventoryPath": {
+        "type": "string",
+        "default": "~/.openclaw/acce-optimizer-data/inventory.json"
+      }
+    }
+  },
+  "uiHints": {
+    "mode": {
+      "label": "Execution mode",
+      "help": "ACCE remains non-mutating in shadow mode. Production routing is not enabled."
+    },
+    "enabled": {
+      "label": "Enable ACCE Optimizer"
+    },
+    "autoDiscoverOnStartup": {
+      "label": "Discover models on first startup",
+      "help": "When enabled, an empty inventory triggers a background discovery. Existing inventories are not automatically recalibrated on every restart."
+    },
+    "ollamaUrl": {
+      "label": "Ollama base URL",
+      "help": "Explicit Ollama endpoint reachable from the OpenClaw Gateway process. In Docker deployments, this may be a host gateway URL such as http://host.docker.internal:11434."
+    },
+    "inventoryPath": {
+      "label": "Private inventory path",
+      "help": "Absolute path or a path beginning with ~/. The inventory is stored with private file permissions."
+    }
+  }
+}

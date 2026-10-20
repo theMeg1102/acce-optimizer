@@ -1,0 +1,3 @@
+# Local dependencies and generated TypeScript build output
+node_modules/
+dist/
