@@ -17,7 +17,13 @@ try {
 } catch {
   throw new Error("npm pack --dry-run did not return valid JSON");
 }
-const entry = Array.isArray(pack) ? pack[0] : pack;
+const entry = Array.isArray(pack)
+  ? pack[0]
+  : pack?.files
+    ? pack
+    : Object.values(pack ?? {}).find((value) =>
+        value && typeof value === "object" && (Array.isArray(value.files) || value.name || value.filename),
+      );
 const packedFiles = entry?.files ?? [];
 const files = new Set(packedFiles.map((file) => String(file.path ?? file).replace(/^package\//u, "")));
 const required = [
