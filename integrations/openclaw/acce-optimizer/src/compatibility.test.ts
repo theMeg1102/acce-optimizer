@@ -42,6 +42,8 @@ describe("OpenClaw 2026.10.5 compatibility metadata", () => {
     expect(pluginManifest.configSchema.properties.mode.enum).toEqual(["adaptive", "shadow"]);
     expect(pluginManifest.configSchema.properties.decisionServiceUrl).toBeDefined();
     expect(pluginManifest.configSchema.properties.decisionServiceToken).toBeDefined();
+    expect(pluginManifest.configSchema.properties.allowExternalNetwork.default).toBe(false);
+    expect(pluginManifest.configSchema.properties.maxCloudCostUsd.default).toBe(0);
   });
 
   it("declares both the source entry and compiled runtime entry", () => {
