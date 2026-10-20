@@ -4,6 +4,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { createJsonFileDiscoveryStore } from "./json-file-discovery-store.js";
 import { refreshModelDiscovery } from "./discovery-coordinator.js";
 import { createOllamaCatalogReader } from "./ollama-catalog-reader.js";
+import { createOllamaTelemetryBootstrap } from "./ollama-telemetry.js";
 
 type AccePluginConfig = {
   enabled?: boolean;
@@ -61,6 +62,13 @@ export default definePluginEntry({
           const result = await refreshModelDiscovery({
             readers: [createOllamaCatalogReader({ baseUrl: options.ollamaUrl })],
             store: createJsonFileDiscoveryStore(storePath),
+            bootstrapTelemetry: createOllamaTelemetryBootstrap({ baseUrl: options.ollamaUrl }),
+            onProgress(progress) {
+              ctx.logger.info(JSON.stringify({
+                event: "acce.discovery.refresh.progress",
+                ...progress,
+              }));
+            },
           });
           ctx.logger.info(JSON.stringify({
             event: "acce.discovery.refresh.completed",

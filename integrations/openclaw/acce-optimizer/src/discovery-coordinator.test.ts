@@ -113,4 +113,44 @@ describe("discovery coordinator", () => {
     })).rejects.toThrow("catalog unavailable");
     expect(store.inspect()).toEqual({});
   });
+  it("emits ordered progress events without enabling production", async () => {
+    const store = createMemoryDiscoveryStore();
+    const events: string[] = [];
+    const result = await refreshModelDiscovery({
+      readers: [reader],
+      store,
+      now: () => instant,
+      async bootstrapTelemetry(model) {
+        if (model.modelId === "model-a") {
+          return {
+            capturedAt: instant.toISOString(),
+            measurementId: "progress-model-a",
+            metrics: { available: true, latencyMs: 12 },
+          };
+        }
+        throw new Error("probe unavailable");
+      },
+      onProgress(event) {
+        events.push(event.type);
+      },
+    });
+
+    expect(events).toEqual([
+      "catalog_started",
+      "catalog_completed",
+      "telemetry_started",
+      "telemetry_completed",
+      "telemetry_started",
+      "telemetry_failed",
+      "refresh_completed",
+    ]);
+    expect(result.telemetryCaptured).toBe(1);
+    expect(result.telemetryPending).toBe(1);
+    expect(result.productionEligible).toBe(0);
+    expect(Object.values(result.snapshot).every(
+      (model) => model.productionEligible === false,
+    )).toBe(true);
+  });
+
+
 });
