@@ -45,6 +45,7 @@ def build_self_check() -> dict:
         "openclaw_session_mutation": False,
         "production_routing": "available_through_governed_decision_bridge",
         "model_execution_by_shadow": False,
+        "adaptive_graph_routing": "governed_astar_when_bridge_is_configured",
         "conversation_content_recorded_by_shadow": False,
         "quota_values_inferred": False,
         "subscription_quota_converted_to_usd": False,
