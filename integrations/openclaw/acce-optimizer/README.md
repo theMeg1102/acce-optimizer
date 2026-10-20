@@ -1,6 +1,6 @@
 # ACCE Optimizer OpenClaw Integration
 
-Native OpenClaw adapter for ACCE Optimizer. Version 0.1.2 targets OpenClaw 2026.9.8 and remains **shadow-only**: it never overrides the selected provider or model.
+Native OpenClaw adapter for ACCE Optimizer. Version 0.1.2 is being adapted and validated against **OpenClaw 2026.10.5**. This candidate declares compatibility with that exact host version only (`>=2026.10.5 <2026.10.6`) until later versions are independently tested. It remains **shadow-only**: it never overrides the selected provider or model.
 
 ## Discovery behavior
 
@@ -49,7 +49,7 @@ The command reports discovered, added, refreshed, telemetry-captured, and teleme
 
 ## OpenClaw compatibility and permissions
 
-The plugin is built and tested against OpenClaw 2026.9.8. Plugin APIs are experimental, so the compatibility range is pinned to the tested minor release.
+The development branch pins the SDK, authoring CLI, build metadata, peer dependency, and `pluginApi` compatibility range to OpenClaw 2026.10.5. The range is deliberately exact to this patch (`>=2026.10.5 <2026.10.6`); do not widen it without CI validation and a live smoke test on the intended host. OpenClaw plugin APIs are experimental. Passing build and unit tests does not replace checking discovery, registration, UI activation, and data/settings migration on a 2026.10.5 Gateway.
 
 For non-bundled installations, the host must explicitly grant conversation-hook access:
 
@@ -72,4 +72,4 @@ The dashboard refresh surface requires the authenticated operator's `operator.ad
 
 ## Validation
 
-The CI pipeline runs the plugin tests, TypeScript build, and Plugin Inspector validation. Tests cover catalog normalization, telemetry handling, durable private persistence, repeated discovery, and the first-run policy. Live deployment verification is still required for each OpenClaw environment before release.
+The CI pipeline runs the plugin tests, TypeScript build, and Plugin Inspector validation against the pinned OpenClaw 2026.10.5 SDK/CLI. Tests cover catalog normalization, telemetry handling, durable private persistence, repeated discovery, first-run policy, and the compatibility metadata. Live deployment verification is still required before release, including plugin discovery/loading, native UI activation, and preservation of existing data/settings.
