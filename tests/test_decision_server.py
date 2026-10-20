@@ -68,7 +68,7 @@ def test_decision_bridge_uses_existing_graph_engine_and_returns_route(tmp_path: 
     result = _decision({"request": request}, registry_path, observations_path)
 
     assert result["status"] == "execution_plan_ready"
-    assert result["engine"] == "authoritative"
+    assert result["engine"] == "adaptive_graph"
     assert result["providerOverride"] == "local-provider"
     assert result["modelOverride"] == "example-local-model"
     assert result["selected_route"]["route_id"] == "local-text-generation"
