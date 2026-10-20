@@ -18,7 +18,7 @@ try {
   throw new Error("npm pack --dry-run did not return valid JSON");
 }
 const packedFiles = pack?.[0]?.files ?? [];
-const files = new Set(packedFiles.map((file) => String(file.path ?? file).replace(/^package\\//u, "")));
+const files = new Set(packedFiles.map((file) => String(file.path ?? file).replace(/^package\//u, "")));
 const required = [
   "package.json",
   "openclaw.plugin.json",
