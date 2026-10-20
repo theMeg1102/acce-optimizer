@@ -50,7 +50,7 @@ describe("discovery coordinator", () => {
     expect(Object.values(store.inspect()).every((model) => model.productionEligible === false)).toBe(true);
   });
 
-  it("retains historical telemetry and user-added state on refresh", async () => {
+  it("retains historical telemetry and user-added state when recalibration fails", async () => {
     let snapshot = upsertDiscoveredModel({}, {
       providerId: "local",
       modelId: "model-a",
@@ -69,7 +69,7 @@ describe("discovery coordinator", () => {
       store,
       now: () => instant,
       async bootstrapTelemetry() {
-        throw new Error("existing telemetry must not be re-captured");
+        throw new Error("recalibration probe unavailable");
       },
     });
 
@@ -81,6 +81,37 @@ describe("discovery coordinator", () => {
     expect(model.telemetry?.metrics.latencyMs).toBe(31);
     expect(model.userAdded).toBe(true);
     expect(model.productionEligible).toBe(false);
+  });
+
+  it("refreshes captured latency evidence on explicit recalibration", async () => {
+    let snapshot = upsertDiscoveredModel({}, {
+      providerId: "local",
+      modelId: "model-a",
+      source: "openclaw",
+      observedAt: "2026-10-18T12:00:00Z",
+    });
+    snapshot = recordModelTelemetry(snapshot, "local/model-a", {
+      capturedAt: "2026-10-18T12:01:00Z",
+      measurementId: "old-measurement",
+      metrics: { latencyMs: 31 },
+    });
+    const store = createMemoryDiscoveryStore(snapshot);
+    const result = await refreshModelDiscovery({
+      readers: [reader],
+      store,
+      now: () => instant,
+      async bootstrapTelemetry(model) {
+        if (model.modelId !== "model-a") return undefined;
+        return {
+          capturedAt: instant.toISOString(),
+          measurementId: "new-measurement",
+          metrics: { available: true, latencyMs: 7 },
+        };
+      },
+    });
+    expect(result.telemetryCaptured).toBe(1);
+    expect(result.snapshot["local/model-a"].telemetry?.measurementId).toBe("new-measurement");
+    expect(result.snapshot["local/model-a"].telemetry?.metrics.latencyMs).toBe(7);
   });
 
   it("does not mark failed telemetry as captured and does not abort discovery", async () => {
