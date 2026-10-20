@@ -56,7 +56,7 @@ export default defineControlUiPlugin({
           button.disabled = true;
           status.textContent = "Discovery running…";
           try {
-            const result = await feature.invoke("refreshDiscovery", {});
+            const result = await feature.invoke("refresh-discovery", {});
             if (disposed || context.signal.aborted) return;
             status.textContent = [
               "Discovery completed",
