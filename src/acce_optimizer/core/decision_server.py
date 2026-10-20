@@ -8,6 +8,7 @@ the canonical Python graph engine.
 """
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -19,18 +20,78 @@ from .models import DecisionRequest
 from .registry import CapabilityRegistry
 from .runtime import DecisionService
 
-MAX_BODY_BYTES = 64 * 1024
+MAX_BODY_BYTES = 256 * 1024
 
 
-def _decision(payload: Any, registry_path: Path) -> dict[str, Any]:
+def _load_registry(registry_path: Path, observations_path: Path) -> CapabilityRegistry:
+    # Re-read the operator-owned registry and measured evidence for each decision.
+    snapshot = read_json(registry_path)
+    observations: dict[str, Any] = {}
+    if observations_path.is_file():
+        loaded = read_json(observations_path)
+        if isinstance(loaded, dict):
+            observations = loaded
+
+    changed = False
+    for route in snapshot.get("instances", []):
+        if not isinstance(route, dict):
+            continue
+        key = f"{str(route.get('provider_id', '')).strip().lower()}/{str(route.get('model_used', '')).strip()}"
+        evidence = observations.get(key)
+        if not isinstance(evidence, dict):
+            continue
+        latency = evidence.get("latency_ms")
+        if isinstance(latency, (int, float)) and not isinstance(latency, bool) and 0 <= latency <= 120000:
+            route["estimated_latency_ms"] = int(round(latency))
+            changed = True
+    if changed:
+        # Make the evidence-dependent registry view visible to deterministic IDs.
+        fingerprint = hashlib.sha256(
+            json.dumps(observations, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()[:12]
+        snapshot["snapshot_id"] = f"{snapshot.get('snapshot_id', 'registry')}-evidence-{fingerprint}"
+    return CapabilityRegistry(snapshot)
+
+
+def _store_observations(payload: Any, observations_path: Path) -> dict[str, int]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("snapshot"), dict):
+        raise ValueError("snapshot must be a JSON object")
+    accepted: dict[str, dict[str, Any]] = {}
+    for key, model in payload["snapshot"].items():
+        if not isinstance(key, str) or not isinstance(model, dict):
+            continue
+        if model.get("productionEligible") is not False or model.get("telemetryStatus") != "captured":
+            continue
+        provider = model.get("providerId")
+        model_id = model.get("modelId")
+        telemetry = model.get("telemetry")
+        metrics = telemetry.get("metrics") if isinstance(telemetry, dict) else None
+        if not isinstance(provider, str) or not provider.strip() or not isinstance(model_id, str) or not model_id.strip():
+            continue
+        if not isinstance(metrics, dict):
+            continue
+        latency = metrics.get("latencyMs")
+        if isinstance(latency, bool) or not isinstance(latency, (int, float)) or not 0 <= latency <= 120000:
+            continue
+        accepted[f"{provider.strip().lower()}/{model_id.strip()}"] = {
+            "latency_ms": int(round(latency)),
+            "captured_at": telemetry.get("capturedAt"),
+            "measurement_id": telemetry.get("measurementId"),
+        }
+    observations_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temporary = observations_path.with_suffix(observations_path.suffix + ".tmp")
+    temporary.write_text(json.dumps(accepted, separators=(",", ":"), allow_nan=False) + "\\n", encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    temporary.replace(observations_path)
+    return {"accepted": len(accepted)}
+    
+def _decision(payload: Any, registry_path: Path, observations_path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("request body must be a JSON object")
     request = payload.get("request")
     if not isinstance(request, dict):
         raise ValueError("request field must be a JSON object")
-    # Re-read the operator-owned registry for each request so approved registry
-    # updates become effective without restarting the bridge.
-    registry = CapabilityRegistry(read_json(registry_path))
+    registry = _load_registry(registry_path, observations_path)
     result = DecisionService(registry=registry).decide(DecisionRequest.from_mapping(request))
     selected = result.get("selected_route")
     if not isinstance(selected, dict):
@@ -59,7 +120,7 @@ def _decision(payload: Any, registry_path: Path) -> dict[str, Any]:
     }
 
 
-def make_handler(registry_path: Path, bearer_token: str | None):
+def make_handler(registry_path: Path, observations_path: Path, bearer_token: str | None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "ACCE-DecisionBridge/1.0"
 
@@ -83,7 +144,8 @@ def make_handler(registry_path: Path, bearer_token: str | None):
                 self._send(404, {"error": "not_found"})
 
         def do_POST(self) -> None:
-            if urlparse(self.path).path != "/v1/decide":
+            route_path = urlparse(self.path).path
+            if route_path not in {"/v1/decide", "/v1/observations"}:
                 self._send(404, {"error": "not_found"})
                 return
             if bearer_token and self.headers.get("Authorization") != f"Bearer {bearer_token}":
@@ -96,7 +158,10 @@ def make_handler(registry_path: Path, bearer_token: str | None):
                     return
                 raw = self.rfile.read(size)
                 payload = json.loads(raw.decode("utf-8"))
-                self._send(200, _decision(payload, registry_path))
+                if route_path == "/v1/observations":
+                    self._send(200, _store_observations(payload, observations_path))
+                else:
+                    self._send(200, _decision(payload, registry_path, observations_path))
             except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
                 self._send(400, {"error": "invalid_request", "detail": str(error)})
             except Exception as error:
@@ -116,9 +181,15 @@ def main() -> None:
     host = os.environ.get("ACCE_DECISION_BIND", "127.0.0.1")
     port = int(os.environ.get("ACCE_DECISION_PORT", "18791"))
     token = os.environ.get("ACCE_DECISION_TOKEN", "").strip() or None
+    observations_raw = os.environ.get("ACCE_OBSERVATIONS_PATH", "").strip()
+    observations_path = (
+        Path(observations_raw).expanduser().resolve()
+        if observations_raw
+        else registry_path.with_name("acce-discovery-observations.json")
+    )
     if host not in {"127.0.0.1", "::1", "localhost"} and not token:
         raise SystemExit("ACCE_DECISION_TOKEN is required when binding beyond loopback")
-    server = ThreadingHTTPServer((host, port), make_handler(registry_path, token))
+    server = ThreadingHTTPServer((host, port), make_handler(registry_path, observations_path, token))
     try:
         server.serve_forever()
     except KeyboardInterrupt:
