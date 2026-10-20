@@ -74,3 +74,12 @@ Tests cover refresh merging, historical evidence retention, telemetry failure, a
 ### OpenClaw catalog adapter
 
 `src/openclaw-catalog-reader.ts` maps the official `models.list` response shape into normalized discovery rows, supports `all` and `configured` views, deduplicates provider/model identities, and rejects malformed responses. The adapter accepts an `AuthorizedGatewayReader` dependency rather than making a privileged request itself. Wire it only to an authenticated Gateway client or a narrowly scoped read-only bridge. The repository now tests this mapping independently, but the live authorized transport and durable store are not yet wired into plugin runtime or Settings.
+
+
+### Configured Ollama discovery and durable inventory
+
+- `src/ollama-catalog-reader.ts` queries only an explicitly supplied Ollama base URL at `/api/tags`; it does not scan localhost or private networks. It rejects embedded credentials, uses a bounded timeout, validates the response, and normalizes model metadata.
+- `src/json-file-discovery-store.ts` provides single-process durable JSON storage at an explicitly configured absolute path. Writes use a same-directory temporary file and atomic rename with private file permissions; malformed, oversized, or production-eligible records are rejected instead of silently resetting inventory.
+- Tests cover endpoint validation, API errors, timeouts, persistence, permissions, malformed files, size limits, and the production-eligibility invariant.
+
+These are now tested integration components. They are not yet wired into OpenClaw plugin startup, a Gateway RPC method, or a Settings button. End-to-end autodiscovery still requires that runtime wiring and a verified authorized catalog transport.
