@@ -80,7 +80,7 @@ def _store_observations(payload: Any, observations_path: Path) -> dict[str, int]
         }
     observations_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = observations_path.with_suffix(observations_path.suffix + ".tmp")
-    temporary.write_text(json.dumps(accepted, separators=(",", ":"), allow_nan=False) + "\\n", encoding="utf-8")
+    temporary.write_text(json.dumps(accepted, separators=(",", ":"), allow_nan=False) + "\n", encoding="utf-8")
     os.chmod(temporary, 0o600)
     temporary.replace(observations_path)
     return {"accepted": len(accepted)}
