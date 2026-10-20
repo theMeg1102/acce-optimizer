@@ -83,3 +83,16 @@ Tests cover refresh merging, historical evidence retention, telemetry failure, a
 - Tests cover endpoint validation, API errors, timeouts, persistence, permissions, malformed files, size limits, and the production-eligibility invariant.
 
 These are now tested integration components. They are not yet wired into OpenClaw plugin startup, a Gateway RPC method, or a Settings button. End-to-end autodiscovery still requires that runtime wiring and a verified authorized catalog transport.
+
+
+### Operator-triggered refresh command
+
+The plugin now registers `openclaw acce-optimizer discovery-refresh`. It requires an explicit Ollama endpoint and an absolute inventory path, for example:
+
+```bash
+openclaw acce-optimizer discovery-refresh \
+  --ollama-url http://localhost:11434 \
+  --store ~/.openclaw/acce-discovery.json
+```
+
+The command expands a leading `~/`, queries only that configured endpoint, atomically persists the inventory, and prints counts. The output explicitly reports `productionEligible: 0`. It does not yet replace the planned Settings autodiscovery button; it provides a real operator-triggered path while the Settings UI and authorized OpenClaw catalog transport are developed.
