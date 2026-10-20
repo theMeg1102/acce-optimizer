@@ -1,24 +1,56 @@
 # ACCE Optimizer OpenClaw Integration
 
-This directory contains the OpenClaw-native adapter for ACCE Optimizer.
+Native OpenClaw adapter for ACCE Optimizer. Version 0.1.2 targets OpenClaw 2026.9.8 and remains **shadow-only**: it never overrides the selected provider or model.
 
-## Current phase
+## Discovery behavior
 
-The adapter is intentionally limited to **shadow mode**.
+- On the first plugin startup, an enabled plugin automatically discovers the configured Ollama catalog when the private inventory is empty.
+- Initial discovery runs as a background plugin service. Connection or catalog errors are logged and do not block Gateway startup; the next Gateway startup or a manual refresh can retry.
+- If an inventory already exists, startup discovery skips it. Restarting OpenClaw does not automatically recalibrate existing records.
+- Set `autoDiscoverOnStartup: false` to disable the first-run behavior.
+- The `ACCE Optimizer` Control UI tab provides a **Recalibrate discovery now** button. It refreshes the configured Ollama catalog and retries telemetry that is still pending.
+- The CLI remains available for explicit operator-controlled refreshes.
 
-- The hook is registered with OpenClaw's typed `before_model_resolve` API.
-- The plugin is enabled by default in shadow mode.
-- Shadow observations do not return `providerOverride` or `modelOverride`.
-- The ACCE core remains independent of OpenClaw.
-- Production routing is not enabled by this integration.
+## Configuration
 
-## OpenClaw compatibility
+Configure these fields in OpenClaw → Settings → Plugins → ACCE Optimizer:
 
-The adapter is built and tested against OpenClaw 2026.9.8. OpenClaw plugin APIs are experimental, so the compatibility range is pinned to the tested minor release.
+| Field | Default | Purpose |
+| --- | --- | --- |
+| `enabled` | `true` | Enable the plugin |
+| `mode` | `shadow` | Non-mutating mode; no production routing |
+| `autoDiscoverOnStartup` | `true` | Run initial discovery only when inventory is empty |
+| `ollamaUrl` | `http://127.0.0.1:11434` | Explicit Ollama base URL reachable from the Gateway process |
+| `inventoryPath` | `~/.openclaw/acce-optimizer-data/inventory.json` | Private durable inventory path |
 
-## Required host permission
+For Docker deployments where Ollama runs on the host, configure a URL reachable from the container, for example `http://host.docker.internal:11434`. The plugin does not scan the network or guess alternative endpoints. An unavailable endpoint leaves the inventory unchanged and is reported in Gateway logs.
 
-When this plugin is enabled as a non-bundled OpenClaw plugin, the host configuration must explicitly grant conversation-hook access:
+The inventory is written atomically with file permissions `0600` and parent directory permissions `0700`. Invalid or oversized inventory files are rejected rather than silently reset.
+
+## Manual refresh
+
+```bash
+openclaw acce-optimizer discovery-refresh \
+  --ollama-url http://127.0.0.1:11434 \
+  --store ~/.openclaw/acce-optimizer-data/inventory.json
+```
+
+The command reports discovered, added, refreshed, telemetry-captured, and telemetry-pending counts. Repeated refreshes merge into existing records instead of duplicating model keys.
+
+## Discovery and telemetry boundaries
+
+- The Ollama reader queries only the explicitly configured `/api/tags` and `/api/show` endpoints, with bounded timeouts and response validation.
+- Telemetry is collected only where the model's reported capabilities support the configured probe. Cloud models are left pending.
+- Telemetry stores measurement evidence and aggregate timings, not generated response text.
+- The coordinator preserves captured evidence, continues when an individual telemetry probe fails, and persists only after the catalog has completed successfully.
+- Every inventory record has `productionEligible: false`; the refresh result always reports `productionEligible: 0`.
+- The discovery feature does not connect to ACCE's authoritative production routing decision path and does not change OpenClaw's selected model.
+
+## OpenClaw compatibility and permissions
+
+The plugin is built and tested against OpenClaw 2026.9.8. Plugin APIs are experimental, so the compatibility range is pinned to the tested minor release.
+
+For non-bundled installations, the host must explicitly grant conversation-hook access:
 
 ```json
 {
@@ -35,64 +67,8 @@ When this plugin is enabled as a non-bundled OpenClaw plugin, the host configura
 }
 ```
 
-This permission is controlled by OpenClaw and is separate from ACCE's own routing and governance controls.
+The dashboard refresh surface requires the authenticated operator's `operator.admin` scope. It exposes counts and status only, not the inventory contents.
 
-## Runtime validation
+## Validation
 
-The integration is validated as a hook-only OpenClaw plugin. Validation confirms runtime registration of `before_model_resolve`, conversation-hook permission, and the absence of production model/provider overrides.
-
-## Next integration phase
-
-The next phase will connect the shadow hook to ACCE's public `DecisionService.decide(request)` contract through an explicit adapter boundary. The adapter must preserve ACCE's governance, quota, context, and production-routing constraints and must remain non-mutating while shadow validation is in progress.
-
-
-## Governed discovery foundation
-
-`src/discovery.ts` now provides deterministic inventory primitives for normalized model observations from OpenClaw, Ollama, configured providers, and custom providers:
-
-- repeated discovery merges sources/capabilities and retains first-seen timestamps, captured telemetry, and explicit user-added state;
-- a new model starts as `DISCOVERED`; telemetry capture advances its evidence state without enabling a route;
-- adding a discovered model requires an explicit `markModelUserAdded` call;
-- every inventory record hard-codes `productionEligible: false`. Production eligibility remains owned by ACCE's authoritative registry/governance path.
-
-**Integration boundary:** these are tested domain primitives, not yet a live catalog poller or Settings button. A catalog reader must supply observations through an authorized OpenClaw interface (or a narrowly scoped read-only bridge); this plugin must not assume arbitrary Gateway methods are callable from an untrusted plugin. Telemetry collection and durable storage/UI orchestration remain follow-on integration work. No production routing is enabled.
-
-
-### Refresh orchestration contract
-
-`src/discovery-coordinator.ts` adds a caller-triggered orchestration boundary:
-
-- `CatalogReader` is injected, so only a deployment-authorized catalog adapter can supply rows;
-- `DiscoveryStore` is injected, so production wiring must choose durable, access-controlled persistence rather than the in-memory test store;
-- telemetry bootstrap is injected and must return actual measurement evidence; errors or absent measurements leave the model pending;
-- the coordinator preserves existing captured telemetry, continues when an individual telemetry probe fails, and saves only after all catalog readers complete successfully;
-- the result always reports `productionEligible: 0`.
-
-Tests cover refresh merging, historical evidence retention, telemetry failure, and avoiding persistence of a partial catalog refresh. This is orchestration infrastructure, not yet a live OpenClaw Gateway adapter, durable production store, or Settings control. Those pieces must be connected before claiming end-to-end autodiscovery.
-
-
-### OpenClaw catalog adapter
-
-`src/openclaw-catalog-reader.ts` maps the official `models.list` response shape into normalized discovery rows, supports `all` and `configured` views, deduplicates provider/model identities, and rejects malformed responses. The adapter accepts an `AuthorizedGatewayReader` dependency rather than making a privileged request itself. Wire it only to an authenticated Gateway client or a narrowly scoped read-only bridge. The repository now tests this mapping independently, but the live authorized transport and durable store are not yet wired into plugin runtime or Settings.
-
-
-### Configured Ollama discovery and durable inventory
-
-- `src/ollama-catalog-reader.ts` queries only an explicitly supplied Ollama base URL at `/api/tags`; it does not scan localhost or private networks. It rejects embedded credentials, uses a bounded timeout, validates the response, and normalizes model metadata.
-- `src/json-file-discovery-store.ts` provides single-process durable JSON storage at an explicitly configured absolute path. Writes use a same-directory temporary file and atomic rename with private file permissions; malformed, oversized, or production-eligible records are rejected instead of silently resetting inventory.
-- Tests cover endpoint validation, API errors, timeouts, persistence, permissions, malformed files, size limits, and the production-eligibility invariant.
-
-These are now tested integration components. They are not yet wired into OpenClaw plugin startup, a Gateway RPC method, or a Settings button. End-to-end autodiscovery still requires that runtime wiring and a verified authorized catalog transport.
-
-
-### Operator-triggered refresh command
-
-The plugin now registers `openclaw acce-optimizer discovery-refresh`. It requires an explicit Ollama endpoint and an absolute inventory path, for example:
-
-```bash
-openclaw acce-optimizer discovery-refresh \
-  --ollama-url http://localhost:11434 \
-  --store ~/.openclaw/acce-discovery.json
-```
-
-The command expands a leading `~/`, queries only that configured endpoint, atomically persists the inventory, and prints counts. The output explicitly reports `productionEligible: 0`. It does not yet replace the planned Settings autodiscovery button; it provides a real operator-triggered path while the Settings UI and authorized OpenClaw catalog transport are developed.
+The CI pipeline runs the plugin tests, TypeScript build, and Plugin Inspector validation. Tests cover catalog normalization, telemetry handling, durable private persistence, repeated discovery, and the first-run policy. Live deployment verification is still required for each OpenClaw environment before release.
