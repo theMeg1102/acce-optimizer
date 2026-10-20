@@ -123,10 +123,16 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
         constraints["external_network_allowed"] = False
         constraints["max_cloud_cost_usd"] = 0
     request_data["constraints"] = constraints
+    decision_log_raw = os.environ.get("ACCE_DECISION_LOG_PATH", "").strip()
+    decision_log_path = Path(decision_log_raw).expanduser().resolve() if decision_log_raw else None
     service = (
-        DecisionService(registry=registry, trusted_state=trusted_state)
+        DecisionService(registry=registry, decision_log_path=decision_log_path, trusted_state=trusted_state)
         if trusted_state is not None
-        else DecisionService(registry=registry, quota_policy=QuotaPolicy(remaining_fraction=0.0))
+        else DecisionService(
+            registry=registry,
+            decision_log_path=decision_log_path,
+            quota_policy=QuotaPolicy(remaining_fraction=0.0),
+        )
     )
     result = service.adaptive_decision(DecisionRequest.from_mapping(request_data))
     result["policy_mode"] = "trusted_state" if trusted_state is not None else "local_only_no_trusted_state"
