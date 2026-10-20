@@ -1,10 +1,12 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const isolatedHome = mkdtempSync(join(tmpdir(), "acce-openclaw-build-"));
 const configPath = join(isolatedHome, "openclaw.json");
+const manifestPath = resolve("openclaw.plugin.json");
+const authoredManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
 try {
   // The authoring CLI initializes OpenClaw state while building UI assets.
@@ -32,6 +34,15 @@ try {
     process.exitCode = 1;
   } else {
     process.exitCode = result.status ?? 1;
+  }
+  if (process.exitCode === 0) {
+    // OpenClaw's asset builder emits runtime UI metadata, but some CLI builds
+    // normalize configSchema.properties away. Preserve the authored config
+    // contract while retaining generated controlUi/runtime metadata.
+    const generatedManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    generatedManifest.configSchema = authoredManifest.configSchema;
+    generatedManifest.uiHints = authoredManifest.uiHints;
+    writeFileSync(manifestPath, `${JSON.stringify(generatedManifest, null, 2)}\\n`, { mode: 0o644 });
   }
 } finally {
   rmSync(isolatedHome, { recursive: true, force: true });
