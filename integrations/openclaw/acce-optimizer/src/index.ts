@@ -50,17 +50,113 @@ export default defineFeaturePlugin({
   setup(api) {
     const config = (api.pluginConfig ?? {}) as AccePluginConfig;
 
-    api.on("before_model_resolve", (event, ctx) => {
-      if (!isEnabled(config)) return;
-      api.logger.info(JSON.stringify({
-        mode: "shadow",
-        hook: "before_model_resolve",
-        sessionKey: ctx.sessionKey ?? null,
-        runId: ctx.runId ?? null,
-        promptPresent: typeof event.prompt === "string" && event.prompt.length > 0,
-      }));
-      // Shadow mode is intentionally non-mutating; no provider/model override.
+    const decisionClient = createDecisionClient({
+      baseUrl: config.decisionServiceUrl ?? process.env.ACCE_DECISION_SERVICE_URL,
+      bearerToken: config.decisionServiceToken ?? process.env.ACCE_DECISION_TOKEN,
     });
+
+    api.on("before_model_resolve", async (event, ctx) => {
+      if (!isEnabled(config)) return;
+      const mode = config.mode ?? "adaptive";
+      if (mode === "shadow") {
+        api.logger.info(JSON.stringify({
+          event: "acce.decision.shadow_observation",
+          hook: "before_model_resolve",
+          promptPresent: typeof event.prompt === "string" && event.prompt.length > 0,
+        }));
+        return;
+      }
+      if (!decisionClient.configured) {
+        api.logger.warn(JSON.stringify({
+          event: "acce.decision.unavailable",
+          reason: "decision-service-not-configured",
+          action: "keeping-openclaw-default-model",
+        }));
+        return;
+      }
+
+      // Never send prompt, attachments, history, or session identifiers to the bridge.
+      try {
+        const decision = await decisionClient.decide({
+          request_id: "openclaw-model-selection",
+          task_class: "general",
+          summary: "OpenClaw text-generation model selection",
+          required_capabilities: ["text-generation"],
+          profile: "balanced_local_first",
+          constraints: {
+            privacy_level: "unknown",
+            external_network_allowed: true,
+            max_cloud_cost_usd: 0,
+            max_latency_ms: 120000,
+            min_quality_score: 0,
+            search_budget: { max_candidate_routes: 100 },
+            quota_budget: { remaining_fraction: 1 },
+          },
+          governance: { validation_required: true },
+        });
+        if (decision?.status !== "execution_plan_ready" ||
+            !decision.providerOverride || !decision.modelOverride) {
+          api.logger.info(JSON.stringify({
+            event: "acce.decision.no_override",
+            decisionId: decision?.decision_id ?? null,
+            decisionState: decision?.decision_state ?? null,
+          }));
+          return;
+        }
+        api.logger.info(JSON.stringify({
+          event: "acce.decision.route_selected",
+          decisionId: decision.decision_id ?? null,
+          routeId: decision.selected_route?.route_id ?? null,
+          provider: decision.providerOverride,
+          model: decision.modelOverride,
+          engine: decision.engine ?? "authoritative",
+        }));
+        return {
+          providerOverride: decision.providerOverride,
+          modelOverride: decision.modelOverride,
+        };
+      } catch (error) {
+        api.logger.warn(JSON.stringify({
+          event: "acce.decision.failed",
+          error: safeError(error),
+          action: "keeping-openclaw-default-model",
+        }));
+        return;
+      }
+    });
+
+    const syncDiscoveryEvidence = async (snapshot: DiscoveryRefreshResult["snapshot"]): Promise<void> => {
+      if (!decisionClient.configured) return;
+      const minimized = Object.fromEntries(Object.entries(snapshot).map(([key, model]) => [
+        key,
+        {
+          providerId: model.providerId,
+          modelId: model.modelId,
+          productionEligible: model.productionEligible,
+          telemetryStatus: model.telemetryStatus,
+          ...(model.telemetry ? {
+            telemetry: {
+              capturedAt: model.telemetry.capturedAt,
+              measurementId: model.telemetry.measurementId,
+              metrics: {
+                latencyMs: model.telemetry.metrics.latencyMs,
+                available: model.telemetry.metrics.available,
+              },
+            },
+          } : {}),
+        },
+      ]));
+      try {
+        await decisionClient.syncObservations(minimized);
+      } catch (error) {
+        // Telemetry remains safely persisted in the inventory; sync can retry
+        // on the next refresh and never makes discovery itself fail.
+        api.logger.warn(JSON.stringify({
+          event: "acce.decision.observation_sync_failed",
+          error: safeError(error),
+        }));
+      }
+    };
 
     const defaultStorePath = () =>
       resolveStorePath(config.inventoryPath ?? "~/.openclaw/acce-optimizer-data/inventory.json");
@@ -82,7 +178,9 @@ export default defineFeaturePlugin({
       });
       activeRefresh = operation;
       try {
-        return await operation;
+        const result = await operation;
+        await syncDiscoveryEvidence(result.snapshot);
+        return result;
       } finally {
         if (activeRefresh === operation) activeRefresh = undefined;
       }
