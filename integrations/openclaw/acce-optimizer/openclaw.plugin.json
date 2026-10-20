@@ -39,7 +39,6 @@
       "decisionServiceUrl": {
         "type": "string",
         "format": "uri",
-        "default": "http://127.0.0.1:18791",
         "description": "Private ACCE Python DecisionService bridge URL. Configure an address reachable from the Gateway container."
       },
       "decisionServiceToken": {
