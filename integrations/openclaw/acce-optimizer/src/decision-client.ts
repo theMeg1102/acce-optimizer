@@ -30,10 +30,31 @@ export function createDecisionClient(params: {
     }
     endpoint.pathname = `${endpoint.pathname.replace(/\/$/u, "")}/v1/decide`;
   }
-  const fetchImpl = params.fetchImpl ?? fetch;
+  const fetchImpl = params.fetchImpl ?? fetch;\n  const observationsEndpoint = endpoint ? new URL(endpoint.href) : undefined;\n  if (observationsEndpoint) observationsEndpoint.pathname = observationsEndpoint.pathname.replace(/\\/v1\\/decide$/u, "/v1/observations");
 
   return {
     configured: Boolean(endpoint),
+    async syncObservations(snapshot: Record<string, unknown>): Promise<boolean> {
+      if (!observationsEndpoint) return false;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetchImpl(observationsEndpoint, {
+          method: "POST",
+          headers: {
+            accept: "application/json",
+            "content-type": "application/json",
+            ...(params.bearerToken ? { authorization: `Bearer ${params.bearerToken}` } : {}),
+          },
+          body: JSON.stringify({ snapshot }),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`ACCE observation sync returned HTTP ${response.status}`);
+        return true;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
     async decide(request: Record<string, unknown>): Promise<AcceDecision | undefined> {
       if (!endpoint) return undefined;
       const controller = new AbortController();
