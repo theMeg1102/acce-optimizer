@@ -23,7 +23,7 @@ from .runtime import DecisionService
 MAX_BODY_BYTES = 256 * 1024
 
 
-def _load_registry(registry_path: Path, observations_path: Path) -> CapabilityRegistry:
+def _load_registry(registry_path: Path, observations_path: Path, *, require_production: bool = True) -> CapabilityRegistry:
     # Re-read the operator-owned registry and measured evidence for each decision.
     snapshot = read_json(registry_path)
     observations: dict[str, Any] = {}
@@ -50,7 +50,7 @@ def _load_registry(registry_path: Path, observations_path: Path) -> CapabilityRe
             json.dumps(observations, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()[:12]
         snapshot["snapshot_id"] = f"{snapshot.get('snapshot_id', 'registry')}-evidence-{fingerprint}"
-    return CapabilityRegistry(snapshot)
+    return CapabilityRegistry.from_production_snapshot(snapshot) if require_production else CapabilityRegistry(snapshot)
 
 
 def _store_observations(payload: Any, observations_path: Path) -> dict[str, int]:
@@ -85,13 +85,13 @@ def _store_observations(payload: Any, observations_path: Path) -> dict[str, int]
     temporary.replace(observations_path)
     return {"accepted": len(accepted)}
     
-def _decision(payload: Any, registry_path: Path, observations_path: Path) -> dict[str, Any]:
+def _decision(payload: Any, registry_path: Path, observations_path: Path, *, require_production: bool = True) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("request body must be a JSON object")
     request = payload.get("request")
     if not isinstance(request, dict):
         raise ValueError("request field must be a JSON object")
-    registry = _load_registry(registry_path, observations_path)
+    registry = _load_registry(registry_path, observations_path, require_production=require_production)
     result = DecisionService(registry=registry).adaptive_decision(DecisionRequest.from_mapping(request))
     selected = result.get("selected_route")
     # Only an actual governed adaptive-graph selection may override OpenClaw.
