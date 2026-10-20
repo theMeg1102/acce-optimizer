@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from acce_optimizer.core.errors import ContractValidationError
 from acce_optimizer.core.decision_server import _decision, _load_registry, _store_observations
 
 
@@ -72,3 +75,9 @@ def test_decision_bridge_uses_existing_graph_engine_and_returns_route(tmp_path: 
     assert result["providerOverride"] == "local-provider"
     assert result["modelOverride"] == "example-local-model"
     assert result["selected_route"]["route_id"] == "local-text-generation"
+
+
+def test_bridge_rejects_non_production_registry_by_default(tmp_path: Path) -> None:
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    with pytest.raises(ContractValidationError, match="registry_mode must be production"):
+        _decision({"request": {}}, registry_path, tmp_path / "observations.json")
