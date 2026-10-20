@@ -94,7 +94,7 @@ def _load_trusted_state() -> TrustedRuntimeState | None:
         return None
     telemetry_path = Path(telemetry_raw).expanduser().resolve()
     ledger_path = Path(ledger_raw).expanduser().resolve()
-    if not telemetry_path.is_file():
+    if not telemetry_path.is_file() or not ledger_path.is_file():
         return None
     budget = float(os.environ.get("ACCE_MONTHLY_CLOUD_BUDGET_USD", "20"))
     period = os.environ.get("ACCE_BUDGET_PERIOD", "").strip() or datetime.now(timezone.utc).strftime("%Y-%m")
