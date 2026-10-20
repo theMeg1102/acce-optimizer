@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { defineFeaturePlugin } from "openclaw/plugin-sdk/feature-plugin";
@@ -82,7 +83,7 @@ export default defineFeaturePlugin({
       try {
         const taskProfile = deriveTaskProfile(event.prompt);
         const decision = await decisionClient.decide({
-          request_id: "openclaw-model-selection",
+          request_id: `openclaw-${randomUUID()}`,
           task_class: "general",
           summary: taskProfile.summary,
           required_capabilities: ["text-generation"],
