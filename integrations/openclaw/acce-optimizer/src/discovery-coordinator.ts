@@ -124,9 +124,10 @@ export async function refreshModelDiscovery(params: {
   }
 
   if (params.bootstrapTelemetry) {
-    const telemetryModels = Object.values(snapshot).filter(
-      (model) => model.telemetryStatus !== "captured",
-    );
+    // Explicit recalibration remeasures every discovered model so current
+    // latency evidence can update the adaptive graph. A failed re-probe leaves
+    // previously captured evidence intact; it never downgrades it to pending.
+    const telemetryModels = Object.values(snapshot);
     for (const [offset, model] of telemetryModels.entries()) {
       const index = offset + 1;
       const total = telemetryModels.length;
