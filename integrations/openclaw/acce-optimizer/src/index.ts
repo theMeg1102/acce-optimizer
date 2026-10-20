@@ -60,7 +60,7 @@ export default defineFeaturePlugin({
       resolveStorePath(config.inventoryPath ?? "~/.openclaw/acce-optimizer-data/inventory.json");
     let activeRefresh: Promise<DiscoveryRefreshResult> | undefined;
 
-    const refresh-discovery = async (
+    const refreshDiscovery = async (
       ollamaUrl: string,
       storePath: string,
       logProgress: (event: unknown) => void = (event) => api.logger.info(JSON.stringify(event)),
@@ -104,7 +104,7 @@ export default defineFeaturePlugin({
             }));
             return;
           }
-          const result = await refresh-discovery(configuredOllamaUrl(config), storePath);
+          const result = await refreshDiscovery(configuredOllamaUrl(config), storePath);
           api.logger.info(JSON.stringify({
             event: "acce.discovery.startup.completed",
             discovered: result.discovered,
@@ -134,7 +134,7 @@ export default defineFeaturePlugin({
         .requiredOption("--store <absolute-path>", "Absolute path for the private discovery inventory JSON")
         .action(async (options: { ollamaUrl: string; store: string }) => {
           const storePath = resolveStorePath(options.store);
-          const result = await refresh-discovery(options.ollamaUrl, storePath, (event) => {
+          const result = await refreshDiscovery(options.ollamaUrl, storePath, (event) => {
             ctx.logger.info(JSON.stringify(event));
           });
           ctx.logger.info(JSON.stringify({
@@ -166,11 +166,11 @@ export default defineFeaturePlugin({
     });
 
     return {
-      async refresh-discovery() {
+      async "refresh-discovery"() {
         if (!isEnabled(config)) {
           throw new Error("ACCE Optimizer is disabled.");
         }
-        const result = await refresh-discovery(configuredOllamaUrl(config), defaultStorePath());
+        const result = await refreshDiscovery(configuredOllamaUrl(config), defaultStorePath());
         api.logger.info(JSON.stringify({
           event: "acce.discovery.dashboard-refresh.completed",
           discovered: result.discovered,
