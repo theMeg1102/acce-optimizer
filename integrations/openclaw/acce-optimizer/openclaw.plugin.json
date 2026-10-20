@@ -13,9 +13,11 @@
       "mode": {
         "type": "string",
         "enum": [
+          "adaptive",
           "shadow"
         ],
-        "default": "shadow"
+        "default": "adaptive",
+        "description": "adaptive invokes the ACCE DecisionService graph; shadow observes without changing provider/model."
       },
       "enabled": {
         "type": "boolean",
@@ -33,13 +35,22 @@
       "inventoryPath": {
         "type": "string",
         "default": "~/.openclaw/acce-optimizer-data/inventory.json"
+      },
+      "decisionServiceUrl": {
+        "type": "string",
+        "format": "uri",
+        "description": "Private ACCE Python DecisionService bridge URL. Configure an address reachable from the Gateway container."
+      },
+      "decisionServiceToken": {
+        "type": "string",
+        "description": "Bearer token for the private ACCE DecisionService bridge. Keep secret."
       }
     }
   },
   "uiHints": {
     "mode": {
-      "label": "Execution mode",
-      "help": "ACCE remains non-mutating in shadow mode. Production routing is not enabled."
+      "label": "Decision mode",
+      "help": "Adaptive uses the existing ACCE graph, hard constraints, cost/quota policy, and route ranking through the Python DecisionService. Shadow observes only."
     },
     "enabled": {
       "label": "Enable ACCE Optimizer"
@@ -55,6 +66,15 @@
     "inventoryPath": {
       "label": "Private inventory path",
       "help": "Absolute path or a path beginning with ~/. The inventory is stored with private file permissions."
+    },
+    "decisionServiceUrl": {
+      "label": "ACCE DecisionService URL",
+      "help": "HTTP bridge backed by the canonical Python DecisionService. The service must be reachable from the Gateway container."
+    },
+    "decisionServiceToken": {
+      "label": "DecisionService bearer token",
+      "sensitive": true,
+      "help": "Required when the bridge binds beyond loopback."
     }
   }
 }

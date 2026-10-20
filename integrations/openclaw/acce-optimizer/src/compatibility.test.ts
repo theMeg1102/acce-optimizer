@@ -19,10 +19,10 @@ const packageJson = JSON.parse(
 ) as PluginPackage;
 const pluginManifest = JSON.parse(
   readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"),
-) as { id: string; version: string };
+) as { id: string; version: string; configSchema: { properties: Record<string, { default?: unknown; enum?: unknown[] }> } };
 
 describe("OpenClaw 2026.10.5 compatibility metadata", () => {
-  it("aligns the package and native manifest at version 1.0.0", () => {
+  it("aligns the package and native manifest at version 0.1.3", () => {
     expect(packageJson.name).toBe("openclaw-plugin-acce-optimizer");
     expect(packageJson.version).toBe("0.1.3");
     expect(pluginManifest.id).toBe("acce-optimizer");
@@ -35,6 +35,13 @@ describe("OpenClaw 2026.10.5 compatibility metadata", () => {
     expect(packageJson.devDependencies.openclaw).toBe("2026.10.5");
     expect(packageJson.openclaw.compat.pluginApi).toBe(exactHostRange);
     expect(packageJson.openclaw.build.openclawVersion).toBe("2026.10.5");
+  });
+
+  it("declares the decision bridge and makes adaptive graph routing the default", () => {
+    expect(pluginManifest.configSchema.properties.mode.default).toBe("adaptive");
+    expect(pluginManifest.configSchema.properties.mode.enum).toEqual(["adaptive", "shadow"]);
+    expect(pluginManifest.configSchema.properties.decisionServiceUrl).toBeDefined();
+    expect(pluginManifest.configSchema.properties.decisionServiceToken).toBeDefined();
   });
 
   it("declares both the source entry and compiled runtime entry", () => {
