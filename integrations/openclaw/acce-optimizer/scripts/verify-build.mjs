@@ -34,7 +34,7 @@ if (uiFiles.length === 0) {
 if (!manifest.configSchema || manifest.configSchema.type !== "object") {
   throw new Error("Plugin manifest is missing its object configSchema");
 }
-const requiredConfigKeys = ["enabled", "mode", "autoDiscoverOnStartup", "ollamaUrl", "inventoryPath", "decisionServiceUrl", "decisionServiceToken"];
+const requiredConfigKeys = ["enabled", "mode", "autoDiscoverOnStartup", "ollamaUrl", "inventoryPath", "decisionServiceUrl", "decisionServiceToken", "allowExternalNetwork", "maxCloudCostUsd"];
 const configProperties = manifest.configSchema.properties;
 if (!configProperties || requiredConfigKeys.some((key) => !(key in configProperties))) {
   throw new Error("Plugin configSchema is missing required discovery or decision-engine properties");
