@@ -217,6 +217,7 @@ class DecisionService:
                 **authoritative_plan,
                 "decision_engine": "authoritative_fallback",
                 "adaptive_comparison": comparison,
+                "ranking_result": comparison.get("ranking_result", []),
                 "routing_applied": False,
             }
             if self._decision_log_path is not None:

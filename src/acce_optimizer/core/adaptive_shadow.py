@@ -81,6 +81,10 @@ def adaptive_shadow_compare(
     total_attractiveness = sum(attractiveness)
     for item, raw_score in zip(ranked, attractiveness, strict=True):
         item["score_percent"] = round(raw_score / total_attractiveness * 100.0, 4) if total_attractiveness else 0.0
+    if ranked and total_attractiveness:
+        # Keep the published distribution at exactly 100.0000 despite rounding.
+        rounded_before_last = sum(item["score_percent"] for item in ranked[:-1])
+        ranked[-1]["score_percent"] = round(max(0.0, 100.0 - rounded_before_last), 4)
     ranked.sort(key=lambda item: (-item["score_percent"], item["route_id"]))
     for index, item in enumerate(ranked, start=1):
         item["rank"] = index
