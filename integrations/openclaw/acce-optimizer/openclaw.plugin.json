@@ -55,6 +55,18 @@
         "minimum": 0,
         "default": 0,
         "description": "Per-request cloud cost ceiling. Cloud routes remain disabled unless explicitly permitted and trusted state is available."
+      },
+      "similarityHistoryPath": {
+        "type": "string",
+        "default": "~/.openclaw/acce-optimizer-data/task-history.json",
+        "description": "Private path for minimized task-category history. Raw prompts are never persisted."
+      },
+      "similarityThreshold": {
+        "type": "number",
+        "minimum": 0.01,
+        "maximum": 1,
+        "default": 0.8,
+        "description": "Minimum matching-observation fraction required to reuse a task pattern as the default."
       }
     }
   },
@@ -94,6 +106,14 @@
     "maxCloudCostUsd": {
       "label": "Maximum cloud cost per request",
       "help": "USD ceiling for a single decision. This does not replace the monthly budget/usage ledger."
+    },
+    "similarityHistoryPath": {
+      "label": "Task-pattern history path",
+      "help": "Private JSON file storing only normalized task categories and timestamps, never prompt text."
+    },
+    "similarityThreshold": {
+      "label": "Task-pattern consensus threshold",
+      "help": "Default 80%. ACCE evaluates odd observation windows starting at 5 and expands until the threshold is met or available history is exhausted."
     }
   }
 }

@@ -70,11 +70,22 @@ export default defineFeaturePlugin({
     api.on("before_model_resolve", async (event) => {
       if (!isEnabled(config)) return;
       const mode = config.mode ?? "adaptive";
+      // Build and persist only category signatures, even in shadow mode, so
+      // operators can accumulate history without allowing model overrides.
+      const taskProfile = deriveTaskProfile(event.prompt);
+      let patternConsensus = evaluateSimilarityWindow(taskProfile.categories, [], { threshold: config.similarityThreshold ?? 0.8 });
+      try {
+        patternConsensus = await taskHistory.recordAndEvaluate(taskProfile.categories, config.similarityThreshold ?? 0.8);
+      } catch (error) {
+        api.logger.warn(JSON.stringify({ event: "acce.similarity.history_unavailable", error: safeError(error), action: "use_per_task_decision" }));
+      }
+      api.logger.info(JSON.stringify({ event: "acce.similarity.consensus", eligibleForDefaultPattern: patternConsensus.eligible, sampleSize: patternConsensus.sampleSize, matchingCount: patternConsensus.matchingCount, matchingFraction: patternConsensus.matchingFraction, requiredMatches: patternConsensus.requiredMatches, windowSizesEvaluated: patternConsensus.windowSizesEvaluated, reason: patternConsensus.reason }));
       if (mode === "shadow") {
         api.logger.info(JSON.stringify({
           event: "acce.decision.shadow_observation",
           hook: "before_model_resolve",
           promptPresent: typeof event.prompt === "string" && event.prompt.length > 0,
+          eligibleForDefaultPattern: patternConsensus.eligible,
         }));
         return;
       }
@@ -89,14 +100,6 @@ export default defineFeaturePlugin({
 
       // Never send prompt, attachments, history, or session identifiers to the bridge.
       try {
-        const taskProfile = deriveTaskProfile(event.prompt);
-        let patternConsensus = evaluateSimilarityWindow(taskProfile.categories, [], { threshold: config.similarityThreshold ?? 0.8 });
-        try {
-          patternConsensus = await taskHistory.recordAndEvaluate(taskProfile.categories, config.similarityThreshold ?? 0.8);
-        } catch (error) {
-          api.logger.warn(JSON.stringify({ event: "acce.similarity.history_unavailable", error: safeError(error), action: "use_per_task_decision" }));
-        }
-        api.logger.info(JSON.stringify({ event: "acce.similarity.consensus", eligibleForDefaultPattern: patternConsensus.eligible, sampleSize: patternConsensus.sampleSize, matchingCount: patternConsensus.matchingCount, matchingFraction: patternConsensus.matchingFraction, requiredMatches: patternConsensus.requiredMatches, windowSizesEvaluated: patternConsensus.windowSizesEvaluated, reason: patternConsensus.reason }));
         const decision = await decisionClient.decide({
           request_id: `openclaw-${randomUUID()}`,
           task_class: "general",

@@ -27,6 +27,8 @@ Configure these fields in OpenClaw → Settings → Plugins → ACCE Optimizer:
 | `autoDiscoverOnStartup` | `true` | Run initial discovery only when inventory is empty |
 | `ollamaUrl` | `http://127.0.0.1:11434` | Explicit Ollama base URL reachable from the Gateway process |
 | `inventoryPath` | `~/.openclaw/acce-optimizer-data/inventory.json` | Private durable inventory path |
+| `similarityHistoryPath` | `~/.openclaw/acce-optimizer-data/task-history.json` | Private history of normalized task categories; no raw prompts |
+| `similarityThreshold` | `0.8` | Minimum fraction of similar observations needed to establish a default task pattern |
 
 For Docker deployments where Ollama runs on the host, configure a URL reachable from the container, for example `http://host.docker.internal:11434`. The plugin does not scan the network or guess alternative endpoints. An unavailable endpoint leaves the inventory unchanged and is reported in Gateway logs.
 
