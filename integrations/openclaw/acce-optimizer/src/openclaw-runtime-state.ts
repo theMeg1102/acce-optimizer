@@ -23,7 +23,7 @@ function finiteNonNegative(value: unknown): number | undefined { return typeof v
 /** Minimize OpenClaw hook payloads to provider/model and aggregate metrics only. */
 export function sanitizeModelTelemetry(value: unknown): SanitizedModelCall {
   const event = record(value) ?? {}; const usage = record(event.usage) ?? record(event.tokenUsage) ?? {}; const result: SanitizedModelCall = {};
-  const providerId = event.provider ?? event.providerId; const modelId = event.model ?? event.modelId; const durationMs = event.durationMs ?? event.elapsedMs ?? event.duration; const outcome = event.outcome ?? event.status; const requestIdHash = event.requestIdHash;
+  const providerId = event.provider ?? event.providerId; const modelId = event.model ?? event.modelId; const durationMs = event.durationMs ?? event.elapsedMs ?? event.duration; const outcome = event.outcome ?? event.status; const requestIdHash = event.upstreamRequestIdHash ?? event.requestIdHash;
   const inputTokens = usage.input ?? usage.inputTokens ?? usage.promptTokens; const outputTokens = usage.output ?? usage.outputTokens ?? usage.completionTokens; const totalTokens = usage.total ?? usage.totalTokens;
   if (typeof providerId === "string") result.providerId = providerId.slice(0, 128);
   if (typeof modelId === "string") result.modelId = modelId.slice(0, 256);
