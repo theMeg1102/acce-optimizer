@@ -18,6 +18,7 @@ export function createTaskHistoryStore(path: string) {
   }
   async function saveUnlocked(history: readonly TaskObservation[]): Promise<void> {
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+    await chmod(dirname(path), 0o700);
     const temporary = `${path}.tmp`;
     await writeFile(temporary, `${JSON.stringify(history.slice(-501))}\n`, { encoding: "utf8", mode: 0o600 });
     await chmod(temporary, 0o600);
