@@ -41,6 +41,11 @@ export function evaluateSimilarityWindow(currentCategories: readonly string[], h
   if (!Number.isInteger(minimumWindow) || minimumWindow < 1 || minimumWindow % 2 === 0) throw new RangeError("minimum similarity window must be a positive odd integer");
   const signature = taskSignature(currentCategories);
   const newestFirst = [...history.filter((item) => typeof item.signature === "string" && item.signature.length > 0)].reverse();
+  // An unclassified "general" task is not a meaningful similarity class.
+  // Never promote a broad catch-all signature into a default pattern.
+  if (signature === "general") {
+    return { eligible: false, sampleSize: 0, matchingCount: 0, matchingFraction: 0, requiredMatches: Math.ceil(minimumWindow * threshold), signature, windowSizesEvaluated: [], reason: "insufficient_history" };
+  }
   const largestOddWindow = newestFirst.length % 2 === 1 ? newestFirst.length : newestFirst.length - 1;
   const windowSizesEvaluated: number[] = [];
   if (largestOddWindow < minimumWindow) return { eligible: false, sampleSize: largestOddWindow, matchingCount: 0, matchingFraction: 0, requiredMatches: Math.ceil(minimumWindow * threshold), signature, windowSizesEvaluated, reason: "insufficient_history" };
