@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 
 from acce_optimizer.core.errors import ContractValidationError
+from acce_optimizer.core.engine import route_blocking_reason
+from acce_optimizer.core.models import CandidateRoute, DecisionRequest
 from acce_optimizer.core.decision_server import _decision, _load_registry, _load_trusted_state, _store_observations
 
 
@@ -101,3 +103,24 @@ def test_missing_trusted_usage_ledger_fails_closed(monkeypatch, tmp_path: Path) 
     monkeypatch.setenv("ACCE_TRUSTED_STATE_TELEMETRY_PATH", str(telemetry_path))
     monkeypatch.setenv("ACCE_USAGE_LEDGER_PATH", str(tmp_path / "missing-ledger.json"))
     assert _load_trusted_state() is None
+
+
+def test_task_specific_routes_win_but_general_routes_remain_fallbacks() -> None:
+    request = DecisionRequest.from_mapping({
+        "request_id": "task-fit-test",
+        "task_class": "coding",
+        "summary": "coding task",
+        "required_capabilities": ["text-generation"],
+    })
+    general_route = CandidateRoute.from_mapping({
+        "route_id": "general-route", "capability_id": "text-generation",
+        "instance_id": "general", "provider_id": "local", "resource_type": "local_model",
+        "availability": "available", "supported_task_classes": ["general"],
+    })
+    analysis_route = CandidateRoute.from_mapping({
+        "route_id": "analysis-route", "capability_id": "text-generation",
+        "instance_id": "analysis", "provider_id": "local", "resource_type": "local_model",
+        "availability": "available", "supported_task_classes": ["analysis"],
+    })
+    assert route_blocking_reason(request, general_route) is None
+    assert route_blocking_reason(request, analysis_route) == "unsupported_task_class"

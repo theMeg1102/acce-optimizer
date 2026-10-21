@@ -176,7 +176,7 @@ def build_execution_graph(
                 source=START_NODE,
                 target=node_id,
                 transition="execute",
-                weight=_edge_weight(route, request),
+                weight=_edge_weight(route, request, policy),
                 learned=route.route_id in estimates,
             )
         )
@@ -274,7 +274,7 @@ def _estimate_from_route(route: CandidateRoute) -> LearnedRouteEstimate:
     )
 
 
-def _edge_weight(route: CandidateRoute, request: DecisionRequest) -> EdgeWeight:
+def _edge_weight(route: CandidateRoute, request: DecisionRequest, policy: RoutingPolicy) -> EdgeWeight:
     latency = route.estimated_latency_ms / max(request.max_latency_ms, 1)
     quota = 1.0 if route.quota_metered else 0.0
     economic = route.estimated_cloud_cost_usd if route.monetary_metered else 0.0
@@ -285,5 +285,5 @@ def _edge_weight(route: CandidateRoute, request: DecisionRequest) -> EdgeWeight:
         quality_deficit=max(0.0, 1.0 - route.quality_score),
         privacy_penalty=route.privacy_penalty,
         operational_risk=route.risk_score,
-        transition_complexity=route.complexity_score,
+        transition_complexity=route.complexity_score + (policy.task_fallback_penalty if request.task_class not in route.supported_task_classes and "general" in route.supported_task_classes else 0.0),
     )

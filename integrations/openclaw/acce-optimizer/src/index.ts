@@ -102,7 +102,7 @@ export default defineFeaturePlugin({
       try {
         const decision = await decisionClient.decide({
           request_id: `openclaw-${randomUUID()}`,
-          task_class: "general",
+          task_class: taskProfile.taskClass,
           summary: `${taskProfile.summary}; historical_pattern=${patternConsensus.eligible ? "eligible" : "not-established"}; matching_fraction=${patternConsensus.matchingFraction.toFixed(4)}`,
           required_capabilities: ["text-generation"],
           profile: "balanced_local_first",

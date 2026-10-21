@@ -7,6 +7,7 @@ describe("privacy-preserving task profiling", () => {
     expect(profile.summary).toContain("coding");
     expect(profile.summary).toContain("analysis");
     expect(profile.summary).not.toContain("secret-token-123");
+    expect(profile.taskClass).toBe("coding");
     expect(profile.summary).not.toContain("Please debug");
     expect(profile.urgency).toBe("normal");
   });
@@ -17,5 +18,6 @@ describe("privacy-preserving task profiling", () => {
     expect(profile.summary).toContain("urgent");
     expect(profile.summary).not.toContain("Fix this");
     expect(profile.categories).not.toContain("urgent");
+    expect(profile.taskClass).toBe("general");
   });
 });
