@@ -16,5 +16,6 @@ describe("privacy-preserving task profiling", () => {
     expect(profile.urgency).toBe("urgent");
     expect(profile.summary).toContain("urgent");
     expect(profile.summary).not.toContain("Fix this");
+    expect(profile.categories).not.toContain("urgent");
   });
 });
