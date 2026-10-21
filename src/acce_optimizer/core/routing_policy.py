@@ -27,7 +27,6 @@ class RoutingPolicy:
     privacy_weight: float = 2.0
     risk_weight: float = 2.0
     complexity_weight: float = 1.0
-    task_fallback_penalty: float = 1.0
 
     local_preference_factor: float = 0.80
     quota_scarcity_weight: float = 2.0
@@ -81,7 +80,6 @@ class RoutingPolicy:
             "privacy_weight",
             "risk_weight",
             "complexity_weight",
-            "task_fallback_penalty",
             "quota_scarcity_weight",
             "budget_scarcity_weight",
         ):

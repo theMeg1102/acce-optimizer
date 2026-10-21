@@ -119,6 +119,7 @@ def build_execution_graph(
     edges: list[GraphEdge] = []
 
     candidates = tuple(routes)
+    admissible: list[tuple[CandidateRoute, LearnedRouteEstimate, GraphNode]] = []
     for route in candidates:
         estimate = estimates.get(route.route_id) or _estimate_from_route(route)
         node_id = f"route:{route.route_id}"
@@ -132,14 +133,19 @@ def build_execution_graph(
             authorized=True,
             available=route.availability == "available",
         )
-
         if not route_is_governed(node, estimate, policy):
             continue
         if route_blocking_reason(request, route) is not None:
             continue
+        admissible.append((route, estimate, node))
 
-        route_by_node[node_id] = route
-        estimate_by_node[node_id] = estimate
+    # Functionality is filtered before cost ranking. Use exact task-class routes
+    # whenever at least one passes governance; use "general" only as a fallback.
+    task_specific = [item for item in admissible if request.task_class in item[0].supported_task_classes]
+    eligible = task_specific or [item for item in admissible if "general" in item[0].supported_task_classes]
+    for route, estimate, node in eligible:
+        route_by_node[node.node_id] = route
+        estimate_by_node[node.node_id] = estimate
         nodes.append(node)
 
     local_nodes = [
@@ -176,7 +182,7 @@ def build_execution_graph(
                 source=START_NODE,
                 target=node_id,
                 transition="execute",
-                weight=_edge_weight(route, request, policy),
+                weight=_edge_weight(route, request),
                 learned=route.route_id in estimates,
             )
         )
@@ -274,7 +280,7 @@ def _estimate_from_route(route: CandidateRoute) -> LearnedRouteEstimate:
     )
 
 
-def _edge_weight(route: CandidateRoute, request: DecisionRequest, policy: RoutingPolicy) -> EdgeWeight:
+def _edge_weight(route: CandidateRoute, request: DecisionRequest) -> EdgeWeight:
     latency = route.estimated_latency_ms / max(request.max_latency_ms, 1)
     quota = 1.0 if route.quota_metered else 0.0
     economic = route.estimated_cloud_cost_usd if route.monetary_metered else 0.0
@@ -285,5 +291,5 @@ def _edge_weight(route: CandidateRoute, request: DecisionRequest, policy: Routin
         quality_deficit=max(0.0, 1.0 - route.quality_score),
         privacy_penalty=route.privacy_penalty,
         operational_risk=route.risk_score,
-        transition_complexity=route.complexity_score + (policy.task_fallback_penalty if request.task_class not in route.supported_task_classes and "general" in route.supported_task_classes else 0.0),
+        transition_complexity=route.complexity_score,
     )

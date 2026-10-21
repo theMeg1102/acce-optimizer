@@ -124,3 +124,45 @@ def test_task_specific_routes_win_but_general_routes_remain_fallbacks() -> None:
     })
     assert route_blocking_reason(request, general_route) is None
     assert route_blocking_reason(request, analysis_route) == "unsupported_task_class"
+
+
+def test_task_specific_route_takes_precedence_over_cheaper_general_route(tmp_path: Path) -> None:
+    source = Path(__file__).parents[1] / "examples" / "registry.json"
+    snapshot = json.loads(source.read_text(encoding="utf-8"))
+    snapshot["instances"].append({
+        "route_id": "coding-specific",
+        "capability_id": "text-generation",
+        "instance_id": "coding-instance",
+        "provider_id": "local-provider",
+        "resource_type": "local_model",
+        "supported_task_classes": ["coding"],
+        "availability": "available",
+        "quality_score": 0.8,
+        "estimated_latency_ms": 9000,
+        "estimated_cloud_cost_usd": 0.0,
+        "model_used": "example-coding-model",
+        "quota_metered": False,
+        "monetary_metered": False,
+        "context_window_tokens": 32768,
+    })
+    registry_path = tmp_path / "runtime-registry.json"
+    registry_path.write_text(json.dumps(snapshot), encoding="utf-8")
+    request = {
+        "request_id": "coding-task-fit",
+        "task_class": "coding",
+        "summary": "coding task",
+        "required_capabilities": ["text-generation"],
+        "profile": "balanced_local_first",
+        "constraints": {
+            "privacy_level": "unknown", "external_network_allowed": False,
+            "max_cloud_cost_usd": 0, "max_latency_ms": 120000,
+            "min_quality_score": 0, "search_budget": {"max_candidate_routes": 100},
+            "quota_budget": {"remaining_fraction": 1},
+        },
+        "governance": {"validation_required": True},
+    }
+    result = _decision({"request": request}, registry_path, tmp_path / "observations.json", require_production=False)
+    assert result["status"] == "execution_plan_ready"
+    assert result["selected_route"]["route_id"] == "coding-specific"
+    assert result["modelOverride"] == "example-coding-model"
+    assert result["ranking_result"][0]["route_id"] == "coding-specific"
