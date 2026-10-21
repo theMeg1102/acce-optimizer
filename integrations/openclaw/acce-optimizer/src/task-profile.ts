@@ -24,7 +24,7 @@ export function deriveTaskProfile(prompt: unknown): TaskProfile {
     return {
       summary: `OpenClaw text-generation request; task categories: ${[...new Set([...categories, "urgent"])].join(", ") || "general"}`,
       urgency: "urgent",
-      categories: [...new Set([...categories, "urgent"])].length ? [...new Set([...categories, "urgent"])] : ["general"],
+      categories: [...new Set(categories)].length ? [...new Set(categories)] : ["general"],
     };
   }
   return {
