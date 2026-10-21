@@ -1,6 +1,7 @@
 export type TaskProfile = {
   summary: string;
   urgency: "normal" | "urgent";
+  categories: string[];
 };
 
 /**
@@ -23,10 +24,12 @@ export function deriveTaskProfile(prompt: unknown): TaskProfile {
     return {
       summary: `OpenClaw text-generation request; task categories: ${[...new Set([...categories, "urgent"])].join(", ") || "general"}`,
       urgency: "urgent",
+      categories: [...new Set([...categories, "urgent"])].length ? [...new Set([...categories, "urgent"])] : ["general"],
     };
   }
   return {
     summary: `OpenClaw text-generation request; task categories: ${[...new Set(categories)].join(", ") || "general"}`,
     urgency: "normal",
+    categories: [...new Set(categories)].length ? [...new Set(categories)] : ["general"],
   };
 }

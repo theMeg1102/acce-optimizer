@@ -1,0 +1,7 @@
+import { describe, expect, it } from "vitest";
+import { readConfiguredRuntimeModels, sanitizeModelTelemetry } from "./openclaw-runtime-state.js";
+describe("OpenClaw runtime state adapter", () => {
+  it("extracts model metadata but never copies provider credentials", () => { const models = readConfiguredRuntimeModels({ models: { providers: { cloud: { apiKey: "never-copy-this", models: [{ id: "cloud-a", contextWindow: 128000, input: ["text", "image"], cost: { input: 1, output: 2 } }] }, local: { models: [{ id: "local-b", contextWindow: 32000 }] } } } }); expect(models).toHaveLength(2); expect(models[0]).toMatchObject({ providerId: "cloud", modelId: "cloud-a", contextWindow: 128000, cost: { input: 1, output: 2 } }); expect(JSON.stringify(models)).not.toContain("never-copy-this"); });
+  it("does not invent a catalog when effective config has no providers", () => { expect(readConfiguredRuntimeModels({ models: {} })).toEqual([]); expect(readConfiguredRuntimeModels(null)).toEqual([]); });
+  it("sanitizes telemetry and drops prompt/response text", () => { const result = sanitizeModelTelemetry({ provider: "cloud", model: "model-a", durationMs: 1200, outcome: "success", prompt: "private", response: "private response", usage: { input: 10, output: 4, total: 14 } }); expect(result).toEqual({ providerId: "cloud", modelId: "model-a", durationMs: 1200, outcome: "success", inputTokens: 10, outputTokens: 4, totalTokens: 14 }); expect(JSON.stringify(result)).not.toContain("private"); });
+});

@@ -10,6 +10,9 @@ import { createOllamaCatalogReader } from "./ollama-catalog-reader.js";
 import { createOllamaTelemetryBootstrap } from "./ollama-telemetry.js";
 import { createDecisionClient } from "./decision-client.js";
 import { deriveTaskProfile } from "./task-profile.js";
+import { createTaskHistoryStore } from "./task-history-store.js";
+import { evaluateSimilarityWindow } from "./task-similarity.js";
+import { readConfiguredRuntimeModels, sanitizeModelTelemetry } from "./openclaw-runtime-state.js";
 
 type AccePluginConfig = {
   enabled?: boolean;
@@ -21,6 +24,8 @@ type AccePluginConfig = {
   autoDiscoverOnStartup?: boolean;
   ollamaUrl?: string;
   inventoryPath?: string;
+  similarityHistoryPath?: string;
+  similarityThreshold?: number;
 };
 
 function isEnabled(config: AccePluginConfig): boolean {
@@ -53,6 +58,9 @@ export default defineFeaturePlugin({
     "Governed adaptive model routing, cost optimization, quota preservation, and context-aware execution planning for OpenClaw.",
   setup(api) {
     const config = (api.pluginConfig ?? {}) as AccePluginConfig;
+    const taskHistory = createTaskHistoryStore(resolveStorePath(config.similarityHistoryPath ?? "~/.openclaw/acce-optimizer-data/task-history.json"));
+    const runtimeModels = readConfiguredRuntimeModels(api.config);
+    api.logger.info(JSON.stringify({ event: "acce.runtime.catalog_observed", source: "openclaw-effective-config", modelCount: runtimeModels.length, pricedModelCount: runtimeModels.filter((model) => model.cost !== undefined).length }));
 
     const decisionClient = createDecisionClient({
       baseUrl: config.decisionServiceUrl ?? process.env.ACCE_DECISION_SERVICE_URL,
@@ -82,10 +90,17 @@ export default defineFeaturePlugin({
       // Never send prompt, attachments, history, or session identifiers to the bridge.
       try {
         const taskProfile = deriveTaskProfile(event.prompt);
+        let patternConsensus = evaluateSimilarityWindow(taskProfile.categories, [], { threshold: config.similarityThreshold ?? 0.8 });
+        try {
+          patternConsensus = await taskHistory.recordAndEvaluate(taskProfile.categories, config.similarityThreshold ?? 0.8);
+        } catch (error) {
+          api.logger.warn(JSON.stringify({ event: "acce.similarity.history_unavailable", error: safeError(error), action: "use_per_task_decision" }));
+        }
+        api.logger.info(JSON.stringify({ event: "acce.similarity.consensus", eligibleForDefaultPattern: patternConsensus.eligible, sampleSize: patternConsensus.sampleSize, matchingCount: patternConsensus.matchingCount, matchingFraction: patternConsensus.matchingFraction, requiredMatches: patternConsensus.requiredMatches, windowSizesEvaluated: patternConsensus.windowSizesEvaluated, reason: patternConsensus.reason }));
         const decision = await decisionClient.decide({
           request_id: `openclaw-${randomUUID()}`,
           task_class: "general",
-          summary: taskProfile.summary,
+          summary: `${taskProfile.summary}; historical_pattern=${patternConsensus.eligible ? "eligible" : "not-established"}; matching_fraction=${patternConsensus.matchingFraction.toFixed(4)}`,
           required_capabilities: ["text-generation"],
           profile: "balanced_local_first",
           constraints: {
@@ -106,6 +121,20 @@ export default defineFeaturePlugin({
             event: "acce.decision.no_override",
             decisionId: decision?.decision_id ?? null,
             decisionState: decision?.decision_state ?? null,
+          }));
+          return;
+        }
+        // Never let a stale ACCE registry select a model absent from the
+        // effective OpenClaw catalog. Empty/unreadable catalog means fail open.
+        if (runtimeModels.length === 0 || !runtimeModels.some((model) =>
+          model.providerId === decision.providerOverride && model.modelId === decision.modelOverride
+        )) {
+          api.logger.warn(JSON.stringify({
+            event: "acce.decision.runtime_catalog_mismatch",
+            provider: decision.providerOverride,
+            model: decision.modelOverride,
+            runtimeCatalogCount: runtimeModels.length,
+            action: "keeping-openclaw-default-model",
           }));
           return;
         }
@@ -130,6 +159,36 @@ export default defineFeaturePlugin({
         }));
         return;
       }
+    });
+
+    // Native OpenClaw 2026.10.5 typed telemetry hooks; aggregate fields only.
+    api.on("model_call_started", (event) => {
+      const telemetry = sanitizeModelTelemetry(event);
+      api.logger.info(JSON.stringify({ event: "acce.telemetry.model_call_started", ...telemetry }));
+    });
+    api.on("model_call_ended", (event) => {
+      const telemetry = sanitizeModelTelemetry(event);
+      api.logger.info(JSON.stringify({ event: "acce.telemetry.model_call_ended", ...telemetry }));
+      if (!decisionClient.configured || !telemetry.providerId || !telemetry.modelId || telemetry.durationMs === undefined) return;
+      const capturedAt = new Date().toISOString();
+      const key = `${telemetry.providerId.toLowerCase()}/${telemetry.modelId}`;
+      void decisionClient.syncObservations({
+        [key]: {
+          providerId: telemetry.providerId,
+          modelId: telemetry.modelId,
+          productionEligible: false,
+          telemetryStatus: "captured",
+          telemetry: {
+            capturedAt,
+            measurementId: telemetry.requestIdHash ?? `openclaw-call-${capturedAt}`,
+            metrics: { latencyMs: telemetry.durationMs, available: telemetry.outcome !== "error" && telemetry.outcome !== "failed" },
+          },
+        },
+      }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.telemetry.sync_failed", error: safeError(error) })));
+    });
+    api.on("llm_output", (event) => {
+      const telemetry = sanitizeModelTelemetry(event);
+      api.logger.info(JSON.stringify({ event: "acce.telemetry.llm_output", ...telemetry }));
     });
 
     const syncDiscoveryEvidence = async (snapshot: DiscoveryRefreshResult["snapshot"]): Promise<void> => {

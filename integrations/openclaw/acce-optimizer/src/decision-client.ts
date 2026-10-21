@@ -5,6 +5,7 @@ export type AcceDecision = {
   providerOverride?: string | null;
   modelOverride?: string | null;
   selected_route?: { route_id?: string; provider_id?: string; model_used?: string } | null;
+  ranking_result?: Array<{ rank?: number; route_id?: string; provider_id?: string; model_used?: string; score_percent?: number; effective_graph_cost?: number; estimated_cloud_cost_usd?: number }>;
   engine?: string;
   policy_mode?: string;
 };

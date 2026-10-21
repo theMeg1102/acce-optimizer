@@ -77,6 +77,12 @@ def test_decision_bridge_uses_existing_graph_engine_and_returns_route(tmp_path: 
     assert result["providerOverride"] == "local-provider"
     assert result["modelOverride"] == "example-local-model"
     assert result["selected_route"]["route_id"] == "local-text-generation"
+    ranking = result["ranking_result"]
+    assert ranking
+    assert ranking[0]["route_id"] == "local-text-generation"
+    assert ranking[0]["rank"] == 1
+    assert ranking[0]["score_percent"] == pytest.approx(100.0)
+    assert sum(item["score_percent"] for item in ranking) == pytest.approx(100.0)
     log_entry = json.loads(decision_log.read_text(encoding="utf-8").splitlines()[0])
     assert log_entry["decision_id"] == result["decision_id"]
     assert "summary" not in log_entry["normalized_request"]

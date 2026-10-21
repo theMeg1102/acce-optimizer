@@ -8,7 +8,7 @@ from .execution_graph import build_execution_graph, search_execution_graph, task
 from .models import DecisionRequest
 from .registry import CapabilityRegistry
 from .resource_state import ResourceState
-from .routing_policy import RoutingPolicy
+from .routing_policy import RoutingPolicy, effective_edge_cost
 
 
 def adaptive_shadow_compare(
@@ -58,6 +58,33 @@ def adaptive_shadow_compare(
         resources,
         routing_policy,
     )
+    node_by_id = {node.node_id: node for node in graph.snapshot.nodes}
+    ranked: list[dict[str, Any]] = []
+    for edge in graph.snapshot.edges:
+        if edge.source != graph.start_node or edge.target not in graph.route_by_node:
+            continue
+        route = graph.route_by_node[edge.target]
+        node = node_by_id[edge.target]
+        estimate = graph.estimate_by_node.get(edge.target)
+        effective_cost = effective_edge_cost(edge, node, resources, estimate, routing_policy)
+        ranked.append({
+            "route_id": route.route_id,
+            "provider_id": route.provider_id,
+            "model_used": route.model_used,
+            "resource_type": route.resource_type,
+            "estimated_cloud_cost_usd": route.estimated_cloud_cost_usd,
+            "effective_graph_cost": effective_cost,
+        })
+    # Normalize inverse effective costs to a comparative percentage distribution.
+    # This is a relative ranking score, not a probability or quality guarantee.
+    attractiveness = [1.0 / max(item["effective_graph_cost"], 1e-9) for item in ranked]
+    total_attractiveness = sum(attractiveness)
+    for item, raw_score in zip(ranked, attractiveness, strict=True):
+        item["score_percent"] = round(raw_score / total_attractiveness * 100.0, 4) if total_attractiveness else 0.0
+    ranked.sort(key=lambda item: (-item["score_percent"], item["route_id"]))
+    for index, item in enumerate(ranked, start=1):
+        item["rank"] = index
+
     adaptive_route_id: str | None = None
     adaptive_cost: float | None = None
     explored_nodes = 0
@@ -126,6 +153,7 @@ def adaptive_shadow_compare(
         "adaptive_explored_nodes": explored_nodes,
         "adaptive_graph_snapshot_id": graph.snapshot.snapshot_id,
         "adaptive_candidate_count": len(candidates),
+        "ranking_result": ranked,
         "adaptive_governed_route_count": len(graph.route_by_node),
         "routing_applied": False,
         "production_selection_unchanged": True,

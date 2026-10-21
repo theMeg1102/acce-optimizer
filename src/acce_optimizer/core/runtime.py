@@ -258,7 +258,7 @@ class DecisionService:
             "status": "execution_plan_ready",
             "decision_state": "adaptive_route_selected",
             "selected_route": selected.as_evidence(),
-            "ranking_result": [adaptive_route_id],
+            "ranking_result": comparison.get("ranking_result", [{"route_id": adaptive_route_id, "score_percent": 100.0, "rank": 1}]),
             "selection_criteria": "governed_astar_adaptive_graph",
             "adaptive_comparison": {
                 **comparison,

@@ -94,6 +94,19 @@ For non-bundled installations, the host must explicitly grant conversation-hook 
 
 The dashboard refresh surface requires the authenticated operator's `operator.admin` scope. It exposes counts and status only, not the inventory contents.
 
+
+## OpenClaw-native runtime observation and task-pattern consensus
+
+The adapter reads the effective in-memory configuration exposed as `api.config` by the pinned OpenClaw 2026.10.5 plugin SDK. It extracts only provider/model identifiers and explicitly configured model metadata (input modalities, context window, and cost fields when present); it never copies provider credentials. A returned ACCE override is rejected unless the exact provider/model pair is present in this effective runtime catalog. If the catalog is empty or the selected model is not present, the plugin keeps OpenClaw's configured model/fallback behavior.
+
+The integration observes the official `model_call_started`, `model_call_ended`, and `llm_output` hooks. It emits minimized aggregate provider/model, duration, outcome, and token-usage fields only. Measured call duration is sent to the existing observation bridge as latency evidence; the bridge currently overlays latency only onto operator-approved matching routes. Usage telemetry is observational and must not be mistaken for a trusted quota or billing ledger. ACCE does not infer provider quota, cloud cost, quality, or production eligibility from a call event.
+
+Task-pattern reuse is governed separately from model ranking. ACCE stores normalized task-category signatures only, never raw prompt text, in a private bounded history file (0600 file, 0700 directory). It evaluates odd sample windows of 5, 7, 9, and onward. A historical pattern is eligible as a default only if at least 80% of the observations in a window match the current normalized category signature; required matches are rounded up (4/5, 6/7, 8/9). It uses the smallest window that passes. If no available odd window passes, ACCE records that no default pattern is established and continues with an individual decision; it does not claim historical consensus. This consensus percentage is not a model ranking score.
+
+The category signature is a deterministic, privacy-preserving heuristic, not semantic embedding similarity. Task outcomes and explicit preference signals are not inferred from raw model-call events. They require separately attributable evidence before they can safely affect future weights. The current bridge still uses the operator-managed graph registry for cost, quality, capability and governance metadata; live OpenClaw catalog membership gates overrides, but does not fabricate missing route economics or production authorization.
+
+For the native API contract, see the official [OpenClaw 2026.10.5 Plugin SDK overview](https://docs.openclaw.ai/plugins/sdk-overview), [typed hook reference](https://docs.openclaw.ai/plugins/hooks/reference), and [Gateway models and usage RPC reference](https://docs.openclaw.ai/gateway/protocol/rpc-system-and-channels). These APIs are experimental and the integration remains pinned to 2026.10.5.
+
 ## Validation
 
 The CI pipeline runs the plugin tests, TypeScript build, and Plugin Inspector validation against the pinned OpenClaw 2026.10.5 SDK/CLI. The Python tests cover the decision bridge and telemetry-to-route integration; the plugin tests cover bridge requests, fail-open behavior, and evidence sync. Live deployment verification is still required before release, including service reachability from the Gateway container, plugin discovery/loading, native UI activation, route selection against the actual registry, and preservation of existing data/settings.
