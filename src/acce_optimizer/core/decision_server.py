@@ -59,7 +59,7 @@ def _load_registry(registry_path: Path, observations_path: Path, *, require_prod
     # prior to avoid overreacting to small samples.
     if route_outcomes_path is not None and task_signature:
         try:
-            raw_outcomes = read_json(route_outcomes_path) if route_outcomes_path.is_file() else []
+            raw_outcomes = json.loads(route_outcomes_path.read_text(encoding="utf-8")) if route_outcomes_path.is_file() else []
         except Exception:
             raw_outcomes = []
         if isinstance(raw_outcomes, list):
@@ -351,7 +351,7 @@ def _store_route_outcome(payload: Any, registry_path: Path, outcomes_path: Path,
     outcomes: list[dict[str, Any]] = []
     if outcomes_path.is_file():
         try:
-            existing = read_json(outcomes_path)
+            existing = json.loads(outcomes_path.read_text(encoding="utf-8"))
             if isinstance(existing, list):
                 outcomes = [item for item in existing if isinstance(item, dict)]
         except Exception:
@@ -367,6 +367,7 @@ def _store_route_outcome(payload: Any, registry_path: Path, outcomes_path: Path,
     })
     outcomes = outcomes[-2000:]
     outcomes_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(outcomes_path.parent, 0o700)
     temporary = outcomes_path.with_suffix(outcomes_path.suffix + ".tmp")
     temporary.write_text(json.dumps(outcomes, separators=(",", ":"), allow_nan=False) + chr(10), encoding="utf-8")
     os.chmod(temporary, 0o600)

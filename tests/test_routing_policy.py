@@ -1,4 +1,5 @@
 from acce_optimizer.core.learning import LearnedPreference, LearnedRouteEstimate, reset_preference_on_change
+import pytest
 from acce_optimizer.core.routing_policy import RoutingPolicy, cloud_override_allowed, next_preference_observation_count, preference_is_promotable, route_preference_penalty
 
 
@@ -135,7 +136,7 @@ def test_learned_route_order_is_a_soft_template_only_for_admitted_routes():
     order = ("route-a", "route-b")
     assert route_preference_penalty("route-a", admitted, preferred_route_id=None, preferred_route_order=order, policy=policy) == 0
     assert route_preference_penalty("route-b", admitted, preferred_route_id=None, preferred_route_order=order, policy=policy) == 0.1
-    assert route_preference_penalty("route-c", admitted, preferred_route_id=None, preferred_route_order=order, policy=policy) == 0.3
+    assert route_preference_penalty("route-c", admitted, preferred_route_id=None, preferred_route_order=order, policy=policy) == pytest.approx(0.3)
     # A template with no still-admitted route is ignored rather than penalizing every candidate.
     assert route_preference_penalty("route-c", admitted, preferred_route_id=None, preferred_route_order=("retired-route",), policy=policy) == 0
     # Explicit operator preference takes precedence over the learned template.
