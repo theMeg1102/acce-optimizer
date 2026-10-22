@@ -137,7 +137,7 @@ export default defineFeaturePlugin({
       try {
         const decision = await decisionClient.decide({
           request_id: `openclaw-${randomUUID()}`,
-          // Send identifiers only: ACCE intersects this live configured catalog
+          // Send allowlisted catalog metadata only: ACCE intersects this live configured catalog
           // with its operator-authorized registry before graph construction.
           runtime_catalog: runtimeModels.map((model) => ({ providerId: model.providerId, modelId: model.modelId, ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}), ...(model.contextTokens ? { contextTokens: model.contextTokens } : {}), ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}), ...(model.cost ? { cost: model.cost } : {}) })),
           task_signature: taskProfile.categories.slice().sort().join("|"),
@@ -184,25 +184,6 @@ export default defineFeaturePlugin({
           }));
           return;
         }
-        const selectedRoute = decision.selected_route;
-        if (typeof ctx.runId === "string" && ctx.runId.length > 0 && selectedRoute?.route_id) {
-          const observation = runObservations.get(ctx.runId);
-          if (observation) {
-            observation.decisionId = typeof decision.decision_id === "string" ? decision.decision_id : undefined;
-            observation.routeId = selectedRoute.route_id;
-            observation.providerId = decision.providerOverride;
-            observation.modelId = decision.modelOverride;
-            void taskHistory.recordDecision(observation.observationId, {
-              decisionId: observation.decisionId ?? "unknown",
-              routeId: selectedRoute.route_id,
-              providerId: decision.providerOverride,
-              modelId: decision.modelOverride,
-              rankedRoutes: (decision.ranking_result ?? []).map((item) => item.route_id).filter((routeId): routeId is string => typeof routeId === "string"),
-            }).then((recorded) => {
-              if (!recorded) api.logger.warn(JSON.stringify({ event: "acce.learning.route_attribution_missing", action: "keep_observation_unattributed" }));
-            }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.learning.route_attribution_failed", error: safeError(error) })));
-          }
-        }
         if (!isModelOverrideAllowed(api.config, contract.pluginId, decision.providerOverride, decision.modelOverride)) {
           api.logger.warn(JSON.stringify({
             event: "acce.decision.override_not_authorized",
@@ -211,6 +192,25 @@ export default defineFeaturePlugin({
             action: "keeping-openclaw-default-model",
           }));
           return;
+        }
+        const selectedRoute = decision.selected_route;
+        if (typeof ctx.runId === "string" && ctx.runId.length > 0 && typeof decision.decision_id === "string" && selectedRoute?.route_id) {
+          const observation = runObservations.get(ctx.runId);
+          if (observation) {
+            observation.decisionId = typeof decision.decision_id === "string" ? decision.decision_id : undefined;
+            observation.routeId = selectedRoute.route_id;
+            observation.providerId = decision.providerOverride;
+            observation.modelId = decision.modelOverride;
+            void taskHistory.recordDecision(observation.observationId, {
+              decisionId: decision.decision_id,
+              routeId: selectedRoute.route_id,
+              providerId: decision.providerOverride,
+              modelId: decision.modelOverride,
+              rankedRoutes: (decision.ranking_result ?? []).map((item) => item.route_id).filter((routeId): routeId is string => typeof routeId === "string"),
+            }).then((recorded) => {
+              if (!recorded) api.logger.warn(JSON.stringify({ event: "acce.learning.route_attribution_missing", action: "keep_observation_unattributed" }));
+            }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.learning.route_attribution_failed", error: safeError(error) })));
+          }
         }
         api.logger.info(JSON.stringify({
           event: "acce.decision.route_selected",
