@@ -89,6 +89,18 @@
           "general": { "$ref": "#/definitions/preferredRoute" }
         },
         "additionalProperties": false
+      },
+      "openclawCliPath": {
+        "type": "string",
+        "default": "openclaw",
+        "description": "Path to the OpenClaw CLI used for documented, read-only runtime status polling."
+      },
+      "runtimeStatusRefreshSeconds": {
+        "type": "integer",
+        "minimum": 60,
+        "maximum": 900,
+        "default": 300,
+        "description": "Background refresh interval for models list and usage status. A stale/missing status snapshot cannot authorize a model override."
       }
     }
   },
@@ -140,6 +152,8 @@
     "preferredRoutes": {
       "label": "Explicit preferred routes",
       "help": "Optional soft preferences per task class, specified by exact providerId/modelId. The Python bridge resolves only routes already authorized in the registry and present in OpenClaw's runtime catalog."
-    }
+    },
+    "openclawCliPath": { "label": "OpenClaw CLI path", "help": "Executable path for the documented read-only models list/status usage commands." },
+    "runtimeStatusRefreshSeconds": { "label": "Runtime status refresh interval (seconds)", "help": "Default 300 seconds. Fresh model availability and provider usage are required for ACCE overrides." }
   }
 }

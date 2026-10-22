@@ -33,6 +33,8 @@ describe("ACCE decision bridge client", () => {
       preference: { providerId: "local", modelId: "model-a" },
       task_signature: "coding|programming",
       preferred_route_order: ["route-a", "route-b"],
+      runtime_status_required: true,
+      runtime_status: { modelsCapturedAt: "2026-10-22T00:00:00Z", models: [], usage: [], usageCapturedAt: "" },
     });
     const init = fetchImpl.mock.calls[0]?.[1] as RequestInit;
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
@@ -40,6 +42,8 @@ describe("ACCE decision bridge client", () => {
     expect(body.preference).toEqual({ providerId: "local", modelId: "model-a" });
     expect(body.task_signature).toBe("coding|programming");
     expect(body.preferred_route_order).toEqual(["route-a", "route-b"]);
+    expect(body.runtime_status_required).toBe(true);
+    expect(body.runtime_status).toMatchObject({ models: [], usage: [] });
     expect(body.request).not.toHaveProperty("runtime_catalog");
     expect(body.request).not.toHaveProperty("preference");
     expect(body.request).not.toHaveProperty("task_signature");

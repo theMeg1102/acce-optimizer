@@ -288,7 +288,7 @@ def _estimate_from_route(route: CandidateRoute) -> LearnedRouteEstimate:
         latency_p50=float(route.estimated_latency_ms),
         latency_p95=float(route.estimated_latency_ms),
         context_growth=0.0,
-        quota_consumption=1.0 if route.quota_metered else 0.0,
+        quota_consumption=(max(0.0, 1.0 - route.runtime_quota_remaining_fraction) if route.runtime_quota_remaining_fraction is not None else (1.0 if route.quota_metered else 0.0)),
         fallback_rate=0.0,
         retry_rate=0.0,
         user_acceptance=None,

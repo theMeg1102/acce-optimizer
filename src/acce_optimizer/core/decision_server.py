@@ -165,6 +165,86 @@ def _load_trusted_state() -> TrustedRuntimeState | None:
         return None
 
 
+def _fresh_iso_timestamp(value: Any, *, max_age_seconds: int = 900) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        timestamp = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - timestamp.astimezone(timezone.utc)).total_seconds()
+        return -60 <= age <= max_age_seconds
+    except (ValueError, TypeError):
+        return False
+
+
+def _apply_runtime_status(
+    registry: CapabilityRegistry,
+    runtime_status: Any,
+    *,
+    required: bool,
+) -> CapabilityRegistry:
+    """Apply fresh OpenClaw CLI availability and usage snapshots as hard gates."""
+    snapshot = registry.snapshot
+    status = runtime_status if isinstance(runtime_status, dict) else {}
+    models_captured_at = status.get("modelsCapturedAt")
+    models = status.get("models")
+    models_fresh = _fresh_iso_timestamp(models_captured_at)
+    if not models_fresh or not isinstance(models, list):
+        if required:
+            snapshot["instances"] = []
+        snapshot["snapshot_id"] = f"{snapshot.get('snapshot_id', 'registry')}-runtime-status-missing"
+        return CapabilityRegistry(snapshot)
+
+    model_by_pair: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in models:
+        if not isinstance(item, dict):
+            continue
+        provider_id, model_id = item.get("providerId"), item.get("modelId")
+        if isinstance(provider_id, str) and isinstance(model_id, str):
+            model_by_pair[(provider_id, model_id)] = item
+
+    usage: dict[str, float] = {}
+    if _fresh_iso_timestamp(status.get("usageCapturedAt")) and isinstance(status.get("usage"), list):
+        for item in status["usage"]:
+            if not isinstance(item, dict):
+                continue
+            provider_id, remaining = item.get("providerId"), item.get("remainingFraction")
+            if isinstance(provider_id, str) and isinstance(remaining, (int, float)) and not isinstance(remaining, bool) and 0 <= remaining <= 1:
+                usage[provider_id] = float(remaining)
+
+    filtered: list[dict[str, Any]] = []
+    for route in snapshot.get("instances", []):
+        if not isinstance(route, dict):
+            continue
+        runtime_model = model_by_pair.get((route.get("provider_id"), route.get("model_used")))
+        # Unknown readiness is not positive availability evidence.
+        if runtime_model is None or runtime_model.get("available") is not True:
+            continue
+        runtime_context = runtime_model.get("contextTokens")
+        if not isinstance(runtime_context, int) or isinstance(runtime_context, bool) or runtime_context <= 0:
+            runtime_context = runtime_model.get("contextWindow")
+        if isinstance(runtime_context, int) and not isinstance(runtime_context, bool) and runtime_context > 0:
+            current_context = route.get("context_window_tokens")
+            route["context_window_tokens"] = min(current_context, runtime_context) if isinstance(current_context, int) and not isinstance(current_context, bool) and current_context > 0 else runtime_context
+
+        if route.get("resource_type") == "cloud_model" and route.get("quota_metered") is True:
+            remaining = usage.get(route.get("provider_id"))
+            if remaining is None or remaining <= 0:
+                continue
+            route["runtime_quota_remaining_fraction"] = remaining
+        filtered.append(route)
+
+    snapshot["instances"] = filtered
+    fingerprint_payload = {
+        "models": sorted((provider, model, row.get("available"), row.get("contextTokens"), row.get("contextWindow")) for (provider, model), row in model_by_pair.items()),
+        "usage": sorted(usage.items()),
+    }
+    fingerprint = hashlib.sha256(json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()[:12]
+    snapshot["snapshot_id"] = f"{snapshot.get('snapshot_id', 'registry')}-runtime-status-{fingerprint}"
+    return CapabilityRegistry(snapshot)
+
+
 def _apply_runtime_catalog(registry: CapabilityRegistry, request: dict[str, Any], runtime_catalog: Any) -> CapabilityRegistry:
     """Intersect the validated operator registry with OpenClaw's live catalog.
 
@@ -255,6 +335,12 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
     registry = _load_registry(registry_path, observations_path, require_production=require_production, route_outcomes_path=route_outcomes_path, task_signature=task_signature)
     if "runtime_catalog" in payload:
         registry = _apply_runtime_catalog(registry, request, payload.get("runtime_catalog"))
+    runtime_status_required = require_production or payload.get("runtime_status_required") is True
+    registry = _apply_runtime_status(
+        registry,
+        payload.get("runtime_status"),
+        required=runtime_status_required,
+    )
     # A preference is a soft ranking signal only. Resolve it to an exact route
     # already present in the operator-authorized, runtime-filtered registry.
     preference = payload.get("preference")

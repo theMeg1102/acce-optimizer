@@ -8,7 +8,7 @@ import pytest
 from acce_optimizer.core.errors import ContractValidationError
 from acce_optimizer.core.engine import route_blocking_reason
 from acce_optimizer.core.models import CandidateRoute, DecisionRequest
-from acce_optimizer.core.decision_server import _apply_runtime_catalog, _decision, _load_registry, _load_trusted_state, _store_observations, _store_route_outcome, _store_issued_decision
+from acce_optimizer.core.decision_server import _apply_runtime_catalog, _apply_runtime_status, _decision, _load_registry, _load_trusted_state, _store_observations, _store_route_outcome, _store_issued_decision
 
 
 def test_discovery_telemetry_updates_only_matching_configured_route(tmp_path: Path) -> None:
@@ -443,3 +443,44 @@ def test_route_outcome_requires_matching_issued_decision_and_is_one_time(tmp_pat
     assert _store_route_outcome(outcome, registry_path, outcomes_path, require_production=False, issued_decisions_path=issued_path)["accepted"] == 1
     with pytest.raises(ValueError, match="recently issued"):
         _store_route_outcome(outcome, registry_path, outcomes_path, require_production=False, issued_decisions_path=issued_path)
+
+
+def test_runtime_status_requires_positive_availability_and_applies_context_cap(tmp_path: Path) -> None:
+    from datetime import datetime, timezone
+
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    registry = _load_registry(registry_path, tmp_path / "observations.json", require_production=False)
+    captured_at = datetime.now(timezone.utc).isoformat()
+    status = {
+        "modelsCapturedAt": captured_at,
+        "usageCapturedAt": captured_at,
+        "models": [{
+            "providerId": "local-provider",
+            "modelId": "example-local-model",
+            "available": True,
+            "contextWindow": 32768,
+            "contextTokens": 8192,
+        }],
+        "usage": [],
+    }
+    admitted = _apply_runtime_status(registry, status, required=True)
+    assert admitted.candidates_for("text-generation")[0].context_window_tokens == 8192
+
+    status["models"][0]["available"] = None
+    unavailable = _apply_runtime_status(registry, status, required=True)
+    assert unavailable.candidates_for("text-generation") == []
+
+
+def test_missing_or_stale_runtime_status_fails_closed_only_when_required(tmp_path: Path) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    registry = _load_registry(registry_path, tmp_path / "observations.json", require_production=False)
+    assert _apply_runtime_status(registry, None, required=False).candidates_for("text-generation")
+    stale = {
+        "modelsCapturedAt": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
+        "usageCapturedAt": "",
+        "models": [{"providerId": "local-provider", "modelId": "example-local-model", "available": True}],
+        "usage": [],
+    }
+    assert _apply_runtime_status(registry, stale, required=True).candidates_for("text-generation") == []

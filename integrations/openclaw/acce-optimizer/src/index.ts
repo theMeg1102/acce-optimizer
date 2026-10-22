@@ -14,6 +14,7 @@ import { createTaskHistoryStore } from "./task-history-store.js";
 import { evaluateSimilarityWindow } from "./task-similarity.js";
 import { readConfiguredRuntimeModels, sanitizeModelTelemetry } from "./openclaw-runtime-state.js";
 import { isModelOverrideAllowed } from "./openclaw-override-policy.js";
+import { readOpenClawRuntimeStatus, type OpenClawRuntimeStatus } from "./openclaw-cli-runtime-status.js";
 
 type AccePluginConfig = {
   enabled?: boolean;
@@ -28,6 +29,8 @@ type AccePluginConfig = {
   similarityHistoryPath?: string;
   similarityThreshold?: number;
   preferredRoutes?: Partial<Record<"coding" | "research" | "analysis" | "general", { providerId: string; modelId: string }>>;
+  openclawCliPath?: string;
+  runtimeStatusRefreshSeconds?: number;
 };
 
 function isEnabled(config: AccePluginConfig): boolean {
@@ -63,6 +66,23 @@ export default defineFeaturePlugin({
     const taskHistory = createTaskHistoryStore(resolveStorePath(config.similarityHistoryPath ?? "~/.openclaw/acce-optimizer-data/task-history.json"));
     // Correlation ids are transient in-memory only; persistent history stores a random observation id, never a run/session id.
     const runObservations = new Map<string, { observationId: string; taskSignature: string; decisionId?: string; routeId?: string; providerId?: string; modelId?: string }>();
+    let runtimeStatus: OpenClawRuntimeStatus | undefined;
+    let runtimeStatusRefreshTimer: ReturnType<typeof setInterval> | undefined;
+    let runtimeStatusStartupTimer: ReturnType<typeof setTimeout> | undefined;
+    let runtimeStatusRefreshInProgress = false;
+    const refreshRuntimeStatus = async (): Promise<void> => {
+      if (runtimeStatusRefreshInProgress) return;
+      runtimeStatusRefreshInProgress = true;
+      try {
+        const snapshot = await readOpenClawRuntimeStatus({ cliPath: config.openclawCliPath, timeoutMs: 18_000 });
+        runtimeStatus = snapshot;
+        api.logger.info(JSON.stringify({ event: "acce.runtime_status.refreshed", models: snapshot.models.length, providersWithUsage: snapshot.usage.length, usageFresh: Boolean(snapshot.usageCapturedAt) }));
+      } catch (error) {
+        api.logger.warn(JSON.stringify({ event: "acce.runtime_status.refresh_failed", error: safeError(error), action: "fail_closed_for_model_override_until_refresh" }));
+      } finally {
+        runtimeStatusRefreshInProgress = false;
+      }
+    };
     const runtimeModels = readConfiguredRuntimeModels(api.config);
     api.logger.info(JSON.stringify({ event: "acce.runtime.catalog_observed", source: "openclaw-effective-config", modelCount: runtimeModels.length, pricedModelCount: runtimeModels.filter((model) => model.cost !== undefined).length }));
 
@@ -121,6 +141,8 @@ export default defineFeaturePlugin({
           // with its operator-authorized registry before graph construction.
           runtime_catalog: runtimeModels.map((model) => ({ providerId: model.providerId, modelId: model.modelId, ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}), ...(model.contextTokens ? { contextTokens: model.contextTokens } : {}), ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}), ...(model.cost ? { cost: model.cost } : {}) })),
           task_signature: taskProfile.categories.slice().sort().join("|"),
+          runtime_status_required: true,
+          runtime_status: runtimeStatus ?? null,
           ...(learnedRouteOrder ? { preferred_route_order: learnedRouteOrder } : {}),
           ...(config.preferredRoutes?.[taskProfile.taskClass] ? { preference: config.preferredRoutes[taskProfile.taskClass] } : {}),
           task_class: taskProfile.taskClass,
@@ -334,6 +356,23 @@ export default defineFeaturePlugin({
     // A background service runs only for a missing/empty inventory. Its
     // promise is deliberately not awaited by service startup, so Ollama
     // availability and model probes cannot delay the Gateway boot sequence.
+    api.registerService({
+      id: "acce-optimizer-runtime-status",
+      start() {
+        if (!isEnabled(config)) return;
+        const intervalSeconds = Math.max(60, Math.min(900, Math.floor(config.runtimeStatusRefreshSeconds ?? 300)));
+        // Keep Gateway-backed CLI calls out of plugin startup and model resolution.
+        runtimeStatusStartupTimer = setTimeout(() => { void refreshRuntimeStatus(); }, 15_000);
+        runtimeStatusRefreshTimer = setInterval(() => { void refreshRuntimeStatus(); }, intervalSeconds * 1000);
+      },
+      stop() {
+        if (runtimeStatusStartupTimer) clearTimeout(runtimeStatusStartupTimer);
+        if (runtimeStatusRefreshTimer) clearInterval(runtimeStatusRefreshTimer);
+        runtimeStatusStartupTimer = undefined;
+        runtimeStatusRefreshTimer = undefined;
+      },
+    });
+
     api.registerService({
       id: "acce-optimizer-autodiscovery",
       start() {

@@ -39,6 +39,10 @@ Task categories are derived locally (coding, research, analysis, general) and on
 
 The signature is a deterministic category heuristic, not semantic embeddings. The plugin correlates OpenClaw's explicit agent_end success/failure with the task observation using a transient in-memory runId and opaque observation ID; run/session IDs are not persisted. The selected decision ID, exact authorized route, and bounded route ranking are stored on that observation. Outcomes are sent to a separate bounded bridge ledger, validated against the operator-authorized registry, and used as task-signature-specific reliability estimates only after five observations, shrunk toward the registry prior. When 80% odd-window consensus is eligible, ACCE may reuse the most recent successful route-order template as a soft ranking penalty; it rebuilds the graph and reapplies all hard checks for each request. Full graph-topology caching and per-user preference learning remain incomplete. Explicit operator preferences are configurable by task class; user identity is not persisted, and run success is not treated as explicit user preference.
 
+## Runtime status polling
+
+ACCE refreshes OpenClaw's published model availability and normalized provider usage windows in the background using the documented read-only CLI commands `openclaw models list --all --json` and `openclaw status --usage --json`. The default interval is 300 seconds (configurable from 60 to 900). The model-resolution hook never launches CLI processes. The bridge requires a fresh model snapshot, admits only exact provider/model rows whose `available` value is `true`, and excludes quota-metered cloud routes when provider usage is stale, missing, or exhausted. If the CLI is unavailable or the model snapshot is stale, ACCE does not override OpenClaw's model choice.
+
 ## Explicit route preferences
 
 Operators can set preferredRoutes in plugin configuration, keyed by task class and exact providerId/modelId. The bridge resolves that pair only against the runtime-filtered, operator-authorized registry. ACCE applies a soft ranking penalty to other admissible routes; a preference cannot bypass privacy, availability, quota, context, cost, or authorization constraints. OpenClaw additionally requires plugins.entries.acce-optimizer.llm.allowModelOverride: true and enforces llm.allowedModels when present.
@@ -49,7 +53,7 @@ The adapter observes OpenClaw's supported model_call_started, model_call_ended, 
 
 ## Remaining integration and validation work
 
-1. Connect model availability and usage/quota status only through a supported, authorized OpenClaw 2026.10.5 interface; do not assume arbitrary in-process RPC access.
+1. Validate the background runtime-status poller end-to-end on OpenClaw 2026.10.5. It uses the documented read-only CLI surfaces `openclaw models list --all --json` and `openclaw status --usage --json`, avoiding private Gateway RPC. Unknown/unavailable model status and stale/missing/exhausted provider quota fail closed for ACCE overrides; CLI failure falls back to OpenClaw's own model selection.
 2. Validate route-linked reliability learning and route-order template reuse end-to-end; full graph-topology caching and per-user preference learning remain separate gaps.
 3. Add live per-request cost estimation only when trustworthy token estimates and configured per-million-token prices are available; otherwise expose uncertainty rather than zero cost.
 4. Complete isolated Gateway smoke tests for bridge reachability, hook payloads, exact catalog filtering, UI activation, route selection, data/settings preservation, fail-open behavior, and rollback.

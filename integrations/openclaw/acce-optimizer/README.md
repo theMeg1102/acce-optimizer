@@ -13,6 +13,10 @@ Native OpenClaw adapter for ACCE Optimizer. This integration branch targets **Op
 - The CLI remains available for explicit operator-controlled refreshes.
 
 
+### Runtime status polling
+
+ACCE refreshes OpenClaw's published model availability and normalized provider usage windows in the background using the documented read-only CLI commands `openclaw models list --all --json` and `openclaw status --usage --json`. The default interval is 300 seconds (configurable from 60 to 900). The model-resolution hook never launches CLI processes. The bridge requires a fresh model snapshot, admits only exact provider/model rows whose `available` value is `true`, and excludes quota-metered cloud routes when provider usage is stale, missing, or exhausted. If the CLI is unavailable or the model snapshot is stale, ACCE does not override OpenClaw's model choice.
+
 ### Explicit route preferences
 
 An operator may configure preferredRoutes by task class in plugin config, for example:
