@@ -33,7 +33,10 @@ export function extractExplicitRoutePreference(
       while (offset >= 0) {
         const previous = offset > 0 ? tail[offset - 1] : "";
         const next = tail[offset + reference.length] ?? "";
-        if ((!previous || !IDENTIFIER_CHAR.test(previous)) && (!next || !IDENTIFIER_CHAR.test(next))) {
+        const afterNext = tail[offset + reference.length + 1] ?? "";
+        const sentencePeriod = next === "." && (!afterNext || /[\\s,!?;:)\\]}>\\"'’”]/u.test(afterNext));
+        if ((!previous || !IDENTIFIER_CHAR.test(previous)) &&
+            (!next || !IDENTIFIER_CHAR.test(next) || sentencePeriod)) {
           matches.set(reference, { providerId: route.providerId, modelId: route.modelId });
         }
         offset = tail.indexOf(reference, offset + reference.length);
