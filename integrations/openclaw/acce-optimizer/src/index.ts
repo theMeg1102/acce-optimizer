@@ -212,7 +212,7 @@ export default defineFeaturePlugin({
       const runId = typeof event.runId === "string" ? event.runId : typeof ctx.runId === "string" ? ctx.runId : undefined;
       if (!runId) return;
       const observation = runObservations.get(runId);
-      if (!observationId) return;
+      if (!observation) return;
       runObservations.delete(runId);
       const outcome = typeof event.success === "boolean" ? (event.success ? "success" : "failure") : undefined;
       if (!outcome) return;
