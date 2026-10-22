@@ -260,7 +260,7 @@ export default defineFeaturePlugin({
           telemetry: {
             capturedAt,
             measurementId: telemetry.requestIdHash ?? `openclaw-call-${capturedAt}`,
-            metrics: { latencyMs: telemetry.durationMs, available: telemetry.outcome !== "error" && telemetry.outcome !== "failed" },
+            metrics: { latencyMs: telemetry.durationMs, available: telemetry.outcome !== "error" && telemetry.outcome !== "failed", ...(telemetry.contextTokenBudget !== undefined ? { contextTokenBudget: telemetry.contextTokenBudget } : {}) },
           },
         },
       }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.telemetry.sync_failed", error: safeError(error) })));

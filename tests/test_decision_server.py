@@ -383,3 +383,36 @@ def test_preferred_route_order_is_normalized_as_a_bounded_tuple() -> None:
     })
     assert request.preferred_route_order == ("route-a", "route-b")
     assert request.normalized()["preferred_route_order"] == ["route-a", "route-b"]
+
+
+def test_observation_sync_merges_models_and_applies_conservative_context_budget(tmp_path: Path) -> None:
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    observations_path = tmp_path / "observations.json"
+    first = {
+        "local-provider/example-local-model": {
+            "providerId": "local-provider",
+            "modelId": "example-local-model",
+            "productionEligible": False,
+            "telemetryStatus": "captured",
+            "telemetry": {"capturedAt": "2026-10-22T00:00:00Z", "measurementId": "m1",
+                          "metrics": {"latencyMs": 120, "contextTokenBudget": 8192}},
+        }
+    }
+    second = {
+        "other-provider/other-model": {
+            "providerId": "other-provider",
+            "modelId": "other-model",
+            "productionEligible": False,
+            "telemetryStatus": "captured",
+            "telemetry": {"capturedAt": "2026-10-22T00:01:00Z", "measurementId": "m2",
+                          "metrics": {"latencyMs": 240}},
+        }
+    }
+    _store_observations({"snapshot": first}, observations_path)
+    _store_observations({"snapshot": second}, observations_path)
+    saved = json.loads(observations_path.read_text(encoding="utf-8"))
+    assert "local-provider/example-local-model" in saved
+    assert "other-provider/other-model" in saved
+    registry = _load_registry(registry_path, observations_path, require_production=False)
+    route = registry.candidates_for("text-generation")[0]
+    assert route.context_window_tokens == 8192

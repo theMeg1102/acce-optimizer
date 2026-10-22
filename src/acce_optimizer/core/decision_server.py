@@ -46,6 +46,11 @@ def _load_registry(registry_path: Path, observations_path: Path, *, require_prod
         if isinstance(latency, (int, float)) and not isinstance(latency, bool) and 0 <= latency <= 120000:
             route["estimated_latency_ms"] = int(round(latency))
             changed = True
+        context_budget = evidence.get("context_window_tokens")
+        if isinstance(context_budget, int) and not isinstance(context_budget, bool) and context_budget > 0:
+            current_context = route.get("context_window_tokens")
+            route["context_window_tokens"] = min(current_context, context_budget) if isinstance(current_context, int) and not isinstance(current_context, bool) and current_context > 0 else context_budget
+            changed = True
     if changed:
         # Make the evidence-dependent registry view visible to deterministic IDs.
         fingerprint = hashlib.sha256(
@@ -95,6 +100,13 @@ def _store_observations(payload: Any, observations_path: Path) -> dict[str, int]
     if not isinstance(payload, dict) or not isinstance(payload.get("snapshot"), dict):
         raise ValueError("snapshot must be a JSON object")
     accepted: dict[str, dict[str, Any]] = {}
+    if observations_path.is_file():
+        try:
+            existing = read_json(observations_path)
+            if isinstance(existing, dict):
+                accepted.update({key: value for key, value in existing.items() if isinstance(key, str) and isinstance(value, dict)})
+        except Exception:
+            accepted = {}
     for key, model in payload["snapshot"].items():
         if not isinstance(key, str) or not isinstance(model, dict):
             continue
@@ -111,12 +123,23 @@ def _store_observations(payload: Any, observations_path: Path) -> dict[str, int]
         latency = metrics.get("latencyMs")
         if isinstance(latency, bool) or not isinstance(latency, (int, float)) or not 0 <= latency <= 120000:
             continue
-        accepted[f"{provider.strip().lower()}/{model_id.strip()}"] = {
+        record = {
             "latency_ms": int(round(latency)),
             "captured_at": telemetry.get("capturedAt"),
             "measurement_id": telemetry.get("measurementId"),
         }
+        key = f"{provider.strip().lower()}/{model_id.strip()}"
+        context_budget = metrics.get("contextTokenBudget")
+        if isinstance(context_budget, int) and not isinstance(context_budget, bool) and 0 < context_budget <= 1_000_000:
+            record["context_window_tokens"] = context_budget
+        else:
+            previous = accepted.get(key)
+            if isinstance(previous, dict) and isinstance(previous.get("context_window_tokens"), int):
+                record["context_window_tokens"] = previous["context_window_tokens"]
+        accepted[key] = record
+    accepted = dict(list(accepted.items())[-500:])
     observations_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(observations_path.parent, 0o700)
     temporary = observations_path.with_suffix(observations_path.suffix + ".tmp")
     temporary.write_text(json.dumps(accepted, separators=(",", ":"), allow_nan=False) + "\n", encoding="utf-8")
     os.chmod(temporary, 0o600)
