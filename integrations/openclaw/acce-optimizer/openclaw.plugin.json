@@ -8,6 +8,17 @@
   },
   "configSchema": {
     "type": "object",
+    "definitions": {
+      "preferredRoute": {
+        "type": "object",
+        "required": ["providerId", "modelId"],
+        "properties": {
+          "providerId": { "type": "string", "minLength": 1 },
+          "modelId": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
     "additionalProperties": false,
     "properties": {
       "mode": {
@@ -67,6 +78,17 @@
         "maximum": 1,
         "default": 0.8,
         "description": "Minimum matching-observation fraction required to reuse a task pattern as the default."
+      },
+      "preferredRoutes": {
+        "type": "object",
+        "description": "Explicit operator preferences by task class. These are soft ranking signals and never bypass route governance.",
+        "properties": {
+          "coding": { "$ref": "#/definitions/preferredRoute" },
+          "research": { "$ref": "#/definitions/preferredRoute" },
+          "analysis": { "$ref": "#/definitions/preferredRoute" },
+          "general": { "$ref": "#/definitions/preferredRoute" }
+        },
+        "additionalProperties": false
       }
     }
   },
@@ -114,6 +136,10 @@
     "similarityThreshold": {
       "label": "Task-pattern consensus threshold",
       "help": "Default 80%. ACCE evaluates odd observation windows starting at 5 and expands until the threshold is met or available history is exhausted."
+    },
+    "preferredRoutes": {
+      "label": "Explicit preferred routes",
+      "help": "Optional soft preferences per task class, specified by exact providerId/modelId. The Python bridge resolves only routes already authorized in the registry and present in OpenClaw's runtime catalog."
     }
   }
 }

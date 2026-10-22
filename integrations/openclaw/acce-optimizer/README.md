@@ -12,6 +12,21 @@ Native OpenClaw adapter for ACCE Optimizer. This integration branch targets **Op
 - Because this is a user-installed native UI plugin, enable **Settings → Labs → Custom plugin UI** in OpenClaw. That experimental setting is off by default. The first-run service and CLI still work when custom UI is disabled.
 - The CLI remains available for explicit operator-controlled refreshes.
 
+
+### Explicit route preferences
+
+An operator may configure preferredRoutes by task class in plugin config, for example:
+
+```json
+{
+  "preferredRoutes": {
+    "coding": { "providerId": "local-provider", "modelId": "example-local-model" }
+  }
+}
+```
+
+The bridge accepts a preference only when the exact provider/model pair exists in both OpenClaw's effective configured catalog and the operator-authorized ACCE registry. ACCE applies a soft penalty to other admissible routes; it never overrides hard governance. OpenClaw separately requires plugins.entries.acce-optimizer.llm.allowModelOverride: true and, if configured, a matching llm.allowedModels entry before the plugin can return a model override.
+
 ## Configuration
 
 Configure these fields in OpenClaw → Settings → Plugins → ACCE Optimizer:
@@ -105,7 +120,7 @@ The integration observes the official `model_call_started`, `model_call_ended`, 
 
 Task-pattern reuse is governed separately from model ranking. ACCE stores normalized task-category signatures only, never raw prompt text, in a private bounded history file (0600 file, 0700 directory). It evaluates odd sample windows of 5, 7, 9, and onward. A historical pattern is eligible as a default only if at least 80% of the observations in a window match the current normalized category signature; required matches are rounded up (4/5, 6/7, 8/9). It uses the smallest window that passes. If no available odd window passes, ACCE records that no default pattern is established and continues with an individual decision; it does not claim historical consensus. This consensus percentage is not a model ranking score.
 
-The category signature is a deterministic, privacy-preserving heuristic, not semantic embedding similarity. The primary task class (`coding`, `research`, `analysis`, or `general`) is derived locally and passed to the graph; exact task-class routes are considered first; `general` routes are considered only when no task-specific route survives hard governance. ACCE ranks admissible routes with its own graph policy and percentage-normalized comparative scores; OpenClaw's catalog is a candidate-eligibility input, not a ranking signal. The operator-managed registry still supplies route capability, quality, economic estimates, and governance metadata. Although OpenClaw's configured prices are available in api.config as USD per million tokens, the pre-resolution hook does not supply the complete effective session token count; ACCE therefore does not fabricate a precise per-request cost from partial prompt data. Missing route economics must not be interpreted as a verified zero price. The plugin correlates OpenClaw's explicit agent_end success/failure with the exact task observation using a transient in-memory runId and an opaque observation ID; run/session IDs are not persisted. This records run outcomes but does not yet connect them to the selected route or change ranking weights. Explicit user-preference learning and reusable graph-template application remain incomplete until route-linked outcome evidence and an explicit preference channel are integrated. The implementation must never infer user preference from model-call completion.
+The category signature is a deterministic, privacy-preserving heuristic, not semantic embedding similarity. The primary task class (`coding`, `research`, `analysis`, or `general`) is derived locally and passed to the graph; exact task-class routes are considered first; `general` routes are considered only when no task-specific route survives hard governance. ACCE ranks admissible routes with its own graph policy and percentage-normalized comparative scores; OpenClaw's catalog is a candidate-eligibility input, not a ranking signal. The operator-managed registry still supplies route capability, quality, economic estimates, and governance metadata. Although OpenClaw's configured prices are available in api.config as USD per million tokens, the pre-resolution hook does not supply the complete effective session token count; ACCE therefore does not fabricate a precise per-request cost from partial prompt data. Missing route economics must not be interpreted as a verified zero price. The plugin correlates OpenClaw's explicit agent_end success/failure with the exact task observation using a transient in-memory runId and an opaque observation ID; run/session IDs are not persisted. The selected decision ID and exact authorized route are persisted on that observation, making outcome evidence route-linked. Optional preferredRoutes plugin config provides explicit operator-set preferences per task class; the Python engine treats these only as a soft ranking penalty against other otherwise-admissible routes. These are not yet per-user learned preferences: stable user identity is intentionally not persisted, and route-linked outcome evidence is not yet promoted into learned weights. Reusable graph-template application remains incomplete.
 
 For the native API contract, see the official [OpenClaw 2026.10.5 Plugin SDK overview](https://docs.openclaw.ai/plugins/sdk-overview), [typed hook reference](https://docs.openclaw.ai/plugins/hooks/reference), and [Gateway models and usage RPC reference](https://docs.openclaw.ai/gateway/protocol/rpc-system-and-channels). These APIs are experimental and the integration remains pinned to 2026.10.5.
 
