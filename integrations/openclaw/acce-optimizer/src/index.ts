@@ -13,6 +13,7 @@ import { deriveTaskProfile } from "./task-profile.js";
 import { createTaskHistoryStore } from "./task-history-store.js";
 import { evaluateSimilarityWindow } from "./task-similarity.js";
 import { readConfiguredRuntimeModels, sanitizeModelTelemetry } from "./openclaw-runtime-state.js";
+import { isModelOverrideAllowed } from "./openclaw-override-policy.js";
 
 type AccePluginConfig = {
   enabled?: boolean;
@@ -172,6 +173,15 @@ export default defineFeaturePlugin({
               if (!recorded) api.logger.warn(JSON.stringify({ event: "acce.learning.route_attribution_missing", action: "keep_observation_unattributed" }));
             }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.learning.route_attribution_failed", error: safeError(error) })));
           }
+        }
+        if (!isModelOverrideAllowed(api.config, contract.pluginId, decision.providerOverride, decision.modelOverride)) {
+          api.logger.warn(JSON.stringify({
+            event: "acce.decision.override_not_authorized",
+            provider: decision.providerOverride,
+            model: decision.modelOverride,
+            action: "keeping-openclaw-default-model",
+          }));
+          return;
         }
         api.logger.info(JSON.stringify({
           event: "acce.decision.route_selected",
