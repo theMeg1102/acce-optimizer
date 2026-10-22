@@ -1,5 +1,5 @@
 type UnknownRecord = Record<string, unknown>;
-export type RuntimeModel = { providerId: string; modelId: string; configured: boolean; modelType?: string; contextWindow?: number; input?: string[]; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } };
+export type RuntimeModel = { providerId: string; modelId: string; configured: boolean; modelType?: string; contextWindow?: number; contextTokens?: number; maxTokens?: number; input?: string[]; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } };
 function record(value: unknown): UnknownRecord | undefined { return value && typeof value === "object" && !Array.isArray(value) ? value as UnknownRecord : undefined; }
 function finitePositive(value: unknown): number | undefined { return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined; }
 /** Read only model metadata from OpenClaw's effective in-memory config. Never copy credentials. */
@@ -13,7 +13,10 @@ export function readConfiguredRuntimeModels(config: unknown): RuntimeModel[] {
       const model = record(modelValue); const modelId = typeof model?.id === "string" ? model.id.trim() : ""; if (!modelId) continue;
       const costValue = record(model?.cost);
       const input = Array.isArray(model?.input) ? model.input.filter((item): item is string => typeof item === "string") : undefined;
-      result.push({ providerId, modelId, configured: true, ...(typeof model?.type === "string" ? { modelType: model.type } : {}), ...(finitePositive(model?.contextWindow) ? { contextWindow: finitePositive(model?.contextWindow) } : {}), ...(input?.length ? { input } : {}), ...(costValue ? { cost: { ...(typeof costValue.input === "number" && Number.isFinite(costValue.input) ? { input: costValue.input } : {}), ...(typeof costValue.output === "number" && Number.isFinite(costValue.output) ? { output: costValue.output } : {}), ...(typeof costValue.cacheRead === "number" && Number.isFinite(costValue.cacheRead) ? { cacheRead: costValue.cacheRead } : {}), ...(typeof costValue.cacheWrite === "number" && Number.isFinite(costValue.cacheWrite) ? { cacheWrite: costValue.cacheWrite } : {}) } } : {}) });
+      const contextWindow = finitePositive(model?.contextWindow) ?? finitePositive(provider?.contextWindow);
+      const contextTokens = finitePositive(model?.contextTokens) ?? finitePositive(provider?.contextTokens) ?? contextWindow;
+      const maxTokens = finitePositive(model?.maxTokens) ?? finitePositive(provider?.maxTokens);
+      result.push({ providerId, modelId, configured: true, ...(typeof model?.type === "string" ? { modelType: model.type } : {}), ...(contextWindow ? { contextWindow } : {}), ...(contextTokens ? { contextTokens } : {}), ...(maxTokens ? { maxTokens } : {}), ...(input?.length ? { input } : {}), ...(costValue ? { cost: { ...(typeof costValue.input === "number" && Number.isFinite(costValue.input) && costValue.input >= 0 ? { input: costValue.input } : {}), ...(typeof costValue.output === "number" && Number.isFinite(costValue.output) && costValue.output >= 0 ? { output: costValue.output } : {}), ...(typeof costValue.cacheRead === "number" && Number.isFinite(costValue.cacheRead) && costValue.cacheRead >= 0 ? { cacheRead: costValue.cacheRead } : {}), ...(typeof costValue.cacheWrite === "number" && Number.isFinite(costValue.cacheWrite) && costValue.cacheWrite >= 0 ? { cacheWrite: costValue.cacheWrite } : {}) } } : {}) });
     }
   }
   return result.sort((a, b) => `${a.providerId}/${a.modelId}`.localeCompare(`${b.providerId}/${b.modelId}`));

@@ -232,3 +232,63 @@ def test_runtime_catalog_allows_only_exact_authorized_pair(tmp_path: Path) -> No
     assert result["providerOverride"] == "local-provider"
     assert result["modelOverride"] == "example-local-model"
     assert result["selected_route"]["route_id"] == "local-text-generation"
+
+
+
+def test_runtime_catalog_context_cap_is_applied_before_decision(tmp_path: Path) -> None:
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    request = {
+        "request_id": "runtime-context-cap",
+        "task_class": "general",
+        "summary": "context cap",
+        "required_capabilities": ["text-generation"],
+        "profile": "balanced_local_first",
+        "constraints": {
+            "privacy_level": "unknown", "external_network_allowed": False,
+            "max_cloud_cost_usd": 0, "max_latency_ms": 120000,
+            "min_quality_score": 0, "search_budget": {"max_candidate_routes": 100},
+            "quota_budget": {"remaining_fraction": 1},
+        },
+        "governance": {"validation_required": True},
+    }
+    result = _decision({
+        "request": request,
+        "runtime_catalog": [{
+            "providerId": "local-provider",
+            "modelId": "example-local-model",
+            "contextWindow": 32768,
+            "contextTokens": 8192,
+        }],
+    }, registry_path, tmp_path / "observations.json", require_production=False)
+    assert result["selected_route"]["route_id"] == "local-text-generation"
+    assert result["selected_route"]["context_window_tokens"] == 8192
+
+
+def test_runtime_price_is_used_only_with_positive_token_estimates(tmp_path: Path) -> None:
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    request = {
+        "request_id": "runtime-price-estimate",
+        "task_class": "general",
+        "summary": "cost estimate",
+        "required_capabilities": ["text-generation"],
+        "context_estimated_input_tokens": 1000,
+        "context_expected_output_tokens": 500,
+        "profile": "balanced_local_first",
+        "constraints": {
+            "privacy_level": "unknown", "external_network_allowed": False,
+            "max_cloud_cost_usd": 0, "max_latency_ms": 120000,
+            "min_quality_score": 0, "search_budget": {"max_candidate_routes": 100},
+            "quota_budget": {"remaining_fraction": 1},
+        },
+        "governance": {"validation_required": True},
+    }
+    result = _decision({
+        "request": request,
+        "runtime_catalog": [{
+            "providerId": "local-provider",
+            "modelId": "example-local-model",
+            "cost": {"input": 2.0, "output": 10.0},
+        }],
+    }, registry_path, tmp_path / "observations.json", require_production=False)
+    assert result["selected_route"]["estimated_cloud_cost_usd"] == pytest.approx(0.007)
+    assert result["selected_route"]["monetary_metered"] is True

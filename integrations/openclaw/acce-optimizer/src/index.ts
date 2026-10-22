@@ -104,7 +104,7 @@ export default defineFeaturePlugin({
           request_id: `openclaw-${randomUUID()}`,
           // Send identifiers only: ACCE intersects this live configured catalog
           // with its operator-authorized registry before graph construction.
-          runtime_catalog: runtimeModels.map((model) => ({ providerId: model.providerId, modelId: model.modelId })),
+          runtime_catalog: runtimeModels.map((model) => ({ providerId: model.providerId, modelId: model.modelId, ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}), ...(model.contextTokens ? { contextTokens: model.contextTokens } : {}), ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}), ...(model.cost ? { cost: model.cost } : {}) })),
           task_class: taskProfile.taskClass,
           summary: `${taskProfile.summary}; historical_pattern=${patternConsensus.eligible ? "eligible" : "not-established"}; matching_fraction=${patternConsensus.matchingFraction.toFixed(4)}`,
           required_capabilities: ["text-generation"],
