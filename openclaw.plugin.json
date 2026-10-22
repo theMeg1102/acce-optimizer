@@ -1,0 +1,159 @@
+{
+  "id": "acce-optimizer",
+  "name": "ACCE Optimizer",
+  "description": "Governed adaptive model routing, cost optimization, quota preservation, and context-aware execution planning for OpenClaw.",
+  "version": "0.1.3",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "definitions": {
+      "preferredRoute": {
+        "type": "object",
+        "required": ["providerId", "modelId"],
+        "properties": {
+          "providerId": { "type": "string", "minLength": 1 },
+          "modelId": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "adaptive",
+          "shadow"
+        ],
+        "default": "adaptive",
+        "description": "adaptive invokes the ACCE DecisionService graph; shadow observes without changing provider/model."
+      },
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "autoDiscoverOnStartup": {
+        "type": "boolean",
+        "default": true
+      },
+      "ollamaUrl": {
+        "type": "string",
+        "format": "uri",
+        "default": "http://127.0.0.1:11434"
+      },
+      "inventoryPath": {
+        "type": "string",
+        "default": "~/.openclaw/acce-optimizer-data/inventory.json"
+      },
+      "decisionServiceUrl": {
+        "type": "string",
+        "format": "uri",
+        "description": "Private ACCE Python DecisionService bridge URL. Configure an address reachable from the Gateway container."
+      },
+      "decisionServiceToken": {
+        "type": "string",
+        "description": "Bearer token for the private ACCE DecisionService bridge. Keep secret."
+      },
+      "allowExternalNetwork": {
+        "type": "boolean",
+        "default": false,
+        "description": "Permit cloud routes only when fresh trusted quota/context state is configured on the ACCE bridge."
+      },
+      "maxCloudCostUsd": {
+        "type": "number",
+        "minimum": 0,
+        "default": 0,
+        "description": "Per-request cloud cost ceiling. Cloud routes remain disabled unless explicitly permitted and trusted state is available."
+      },
+      "similarityHistoryPath": {
+        "type": "string",
+        "default": "~/.openclaw/acce-optimizer-data/task-history.json",
+        "description": "Private path for minimized task-category history. Raw prompts are never persisted."
+      },
+      "similarityThreshold": {
+        "type": "number",
+        "minimum": 0.01,
+        "maximum": 1,
+        "default": 0.8,
+        "description": "Minimum matching-observation fraction required to reuse a task pattern as the default."
+      },
+      "preferredRoutes": {
+        "type": "object",
+        "description": "Explicit operator preferences by task class. These are soft ranking signals and never bypass route governance.",
+        "properties": {
+          "coding": { "$ref": "#/definitions/preferredRoute" },
+          "research": { "$ref": "#/definitions/preferredRoute" },
+          "analysis": { "$ref": "#/definitions/preferredRoute" },
+          "general": { "$ref": "#/definitions/preferredRoute" }
+        },
+        "additionalProperties": false
+      },
+      "openclawCliPath": {
+        "type": "string",
+        "default": "openclaw",
+        "description": "Path to the OpenClaw CLI used for documented, read-only runtime status polling."
+      },
+      "runtimeStatusRefreshSeconds": {
+        "type": "integer",
+        "minimum": 60,
+        "maximum": 900,
+        "default": 300,
+        "description": "Background refresh interval for models list and usage status. A stale/missing status snapshot cannot authorize a model override."
+      }
+    }
+  },
+  "uiHints": {
+    "mode": {
+      "label": "Decision mode",
+      "help": "Adaptive uses the existing ACCE graph, hard constraints, cost/quota policy, and route ranking through the Python DecisionService. Shadow observes only."
+    },
+    "enabled": {
+      "label": "Enable ACCE Optimizer"
+    },
+    "autoDiscoverOnStartup": {
+      "label": "Discover models on first startup",
+      "help": "When enabled, an empty inventory triggers a background discovery. Existing inventories are not automatically recalibrated on every restart."
+    },
+    "ollamaUrl": {
+      "label": "Ollama base URL",
+      "help": "Explicit Ollama endpoint reachable from the OpenClaw Gateway process. In Docker deployments, this may be a host gateway URL such as http://host.docker.internal:11434."
+    },
+    "inventoryPath": {
+      "label": "Private inventory path",
+      "help": "Absolute path or a path beginning with ~/. The inventory is stored with private file permissions."
+    },
+    "decisionServiceUrl": {
+      "label": "ACCE DecisionService URL",
+      "help": "HTTP bridge backed by the canonical Python DecisionService. The service must be reachable from the Gateway container."
+    },
+    "decisionServiceToken": {
+      "label": "DecisionService bearer token",
+      "sensitive": true,
+      "help": "Required when the bridge binds beyond loopback."
+    },
+    "allowExternalNetwork": {
+      "label": "Allow external/cloud routes",
+      "help": "Off by default. The bridge still fails closed to local routes unless fresh trusted quota/context telemetry and a usage ledger are configured."
+    },
+    "maxCloudCostUsd": {
+      "label": "Maximum cloud cost per request",
+      "help": "USD ceiling for a single decision. This does not replace the monthly budget/usage ledger."
+    },
+    "similarityHistoryPath": {
+      "label": "Task-pattern history path",
+      "help": "Private JSON file storing only normalized task categories and timestamps, never prompt text."
+    },
+    "similarityThreshold": {
+      "label": "Task-pattern consensus threshold",
+      "help": "Default 80%. ACCE evaluates odd observation windows starting at 5 and expands until the threshold is met or available history is exhausted."
+    },
+    "preferredRoutes": {
+      "label": "Explicit preferred routes",
+      "help": "Optional soft preferences per task class, specified by exact providerId/modelId. The Python bridge resolves only routes already authorized in the registry and present in OpenClaw's runtime catalog."
+    },
+    "openclawCliPath": { "label": "OpenClaw CLI path", "help": "Executable path for the documented read-only models list/status usage commands." },
+    "runtimeStatusRefreshSeconds": { "label": "Runtime status refresh interval (seconds)", "help": "Default 300 seconds. Fresh model availability and provider usage are required for ACCE overrides." }
+  }
+}
