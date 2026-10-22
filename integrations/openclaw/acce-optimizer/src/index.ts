@@ -62,7 +62,7 @@ export default defineFeaturePlugin({
     const config = (api.pluginConfig ?? {}) as AccePluginConfig;
     const taskHistory = createTaskHistoryStore(resolveStorePath(config.similarityHistoryPath ?? "~/.openclaw/acce-optimizer-data/task-history.json"));
     // Correlation ids are transient in-memory only; persistent history stores a random observation id, never a run/session id.
-    const runObservations = new Map<string, { observationId: string; decisionId?: string; routeId?: string; providerId?: string; modelId?: string }>();
+    const runObservations = new Map<string, { observationId: string; taskSignature: string; decisionId?: string; routeId?: string; providerId?: string; modelId?: string }>();
     const runtimeModels = readConfiguredRuntimeModels(api.config);
     api.logger.info(JSON.stringify({ event: "acce.runtime.catalog_observed", source: "openclaw-effective-config", modelCount: runtimeModels.length, pricedModelCount: runtimeModels.filter((model) => model.cost !== undefined).length }));
 
@@ -82,7 +82,7 @@ export default defineFeaturePlugin({
         const recorded = await taskHistory.recordAndEvaluateWithId(taskProfile.categories, config.similarityThreshold ?? 0.8);
         patternConsensus = recorded.consensus;
         if (typeof ctx.runId === "string" && ctx.runId.length > 0) {
-          runObservations.set(ctx.runId, { observationId: recorded.observationId });
+          runObservations.set(ctx.runId, { observationId: recorded.observationId, taskSignature: taskProfile.categories.slice().sort().join("|") });
           while (runObservations.size > 1000) {
             const oldest = runObservations.keys().next().value;
             if (typeof oldest !== "string") break;
@@ -118,6 +118,7 @@ export default defineFeaturePlugin({
           // Send identifiers only: ACCE intersects this live configured catalog
           // with its operator-authorized registry before graph construction.
           runtime_catalog: runtimeModels.map((model) => ({ providerId: model.providerId, modelId: model.modelId, ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}), ...(model.contextTokens ? { contextTokens: model.contextTokens } : {}), ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}), ...(model.cost ? { cost: model.cost } : {}) })),
+          task_signature: taskProfile.categories.slice().sort().join("|"),
           ...(config.preferredRoutes?.[taskProfile.taskClass] ? { preference: config.preferredRoutes[taskProfile.taskClass] } : {}),
           task_class: taskProfile.taskClass,
           summary: `${taskProfile.summary}; historical_pattern=${patternConsensus.eligible ? "eligible" : "not-established"}; matching_fraction=${patternConsensus.matchingFraction.toFixed(4)}`,
@@ -221,6 +222,18 @@ export default defineFeaturePlugin({
       void taskHistory.recordOutcome(observation.observationId, outcome).then((updated) => {
         api.logger.info(JSON.stringify({ event: "acce.learning.outcome_recorded", attributed: updated, outcome }));
       }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.learning.outcome_unavailable", error: safeError(error) })));
+      if (decisionClient.configured && observation.routeId && observation.providerId && observation.modelId) {
+        void decisionClient.recordOutcome({
+          route_id: observation.routeId,
+          provider_id: observation.providerId,
+          model_id: observation.modelId,
+          task_signature: observation.taskSignature,
+          outcome,
+          ...(observation.decisionId ? { decision_id: observation.decisionId } : {}),
+        }).then((accepted) => {
+          api.logger.info(JSON.stringify({ event: "acce.learning.route_outcome_synced", accepted, outcome }));
+        }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.learning.route_outcome_sync_failed", error: safeError(error) })));
+      }
     });
 
     // Native OpenClaw 2026.10.5 typed telemetry hooks; aggregate fields only.

@@ -277,9 +277,9 @@ def search_execution_graph(
 def _estimate_from_route(route: CandidateRoute) -> LearnedRouteEstimate:
     return LearnedRouteEstimate(
         route_id=route.route_id,
-        sample_count=0,
-        confidence=0.0,
-        success_rate=route.quality_score,
+        sample_count=route.observed_sample_count,
+        confidence=min(route.observed_sample_count / 10.0, 1.0),
+        success_rate=route.observed_success_rate if route.observed_success_rate is not None else route.quality_score,
         quality_score=route.quality_score,
         latency_p50=float(route.estimated_latency_ms),
         latency_p95=float(route.estimated_latency_ms),

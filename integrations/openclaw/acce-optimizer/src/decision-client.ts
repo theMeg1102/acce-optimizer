@@ -37,6 +37,10 @@ export function createDecisionClient(params: {
   if (observationsEndpoint) {
     observationsEndpoint.pathname = observationsEndpoint.pathname.replace(/\/v1\/decide$/u, "/v1/observations");
   }
+  const outcomesEndpoint = endpoint ? new URL(endpoint.href) : undefined;
+  if (outcomesEndpoint) {
+    outcomesEndpoint.pathname = outcomesEndpoint.pathname.replace(/\/v1\/decide$/u, "/v1/outcomes");
+  }
 
   function headers(): Record<string, string> {
     return {
@@ -48,6 +52,23 @@ export function createDecisionClient(params: {
 
   return {
     configured: Boolean(endpoint),
+    async recordOutcome(outcome: Record<string, unknown>): Promise<boolean> {
+      if (!outcomesEndpoint) return false;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetchImpl(outcomesEndpoint, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify(outcome),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`ACCE outcome sync returned HTTP ${response.status}`);
+        return true;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
     async syncObservations(snapshot: Record<string, unknown>): Promise<boolean> {
       if (!observationsEndpoint) return false;
       const controller = new AbortController();
@@ -73,7 +94,15 @@ export function createDecisionClient(params: {
         const response = await fetchImpl(endpoint, {
           method: "POST",
           headers: headers(),
-          body: JSON.stringify({ request }),
+          body: JSON.stringify((() => {
+            const { runtime_catalog, preference, task_signature, ...decisionRequest } = request;
+            return {
+              request: decisionRequest,
+              ...(runtime_catalog !== undefined ? { runtime_catalog } : {}),
+              ...(preference !== undefined ? { preference } : {}),
+              ...(task_signature !== undefined ? { task_signature } : {}),
+            };
+          })()),
           signal: controller.signal,
         });
         if (!response.ok) throw new Error(`ACCE decision service returned HTTP ${response.status}`);

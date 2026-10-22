@@ -378,6 +378,8 @@ class CandidateRoute:
     quota_metered: bool
     monetary_metered: bool
     context_window_tokens: int | None
+    observed_success_rate: float | None = None
+    observed_sample_count: int = 0
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "CandidateRoute":
@@ -429,6 +431,11 @@ class CandidateRoute:
             context_window_tokens=_optional_integer(
                 data.get("context_window_tokens"), "context_window_tokens"
             ),
+            observed_success_rate=(
+                _number(data.get("observed_success_rate"), "observed_success_rate", 0.0, maximum=1.0)
+                if data.get("observed_success_rate") is not None else None
+            ),
+            observed_sample_count=_integer(data.get("observed_sample_count"), "observed_sample_count", 0),
         )
 
     def as_evidence(self) -> dict[str, Any]:
@@ -463,4 +470,5 @@ class CandidateRoute:
             "quota_metered": self.quota_metered,
             "monetary_metered": self.monetary_metered,
             "context_window_tokens": self.context_window_tokens,
+            **({"observed_success_rate": self.observed_success_rate, "observed_sample_count": self.observed_sample_count} if self.observed_success_rate is not None and self.observed_sample_count > 0 else {}),
         }

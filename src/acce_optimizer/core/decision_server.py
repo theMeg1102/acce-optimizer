@@ -25,7 +25,7 @@ from .trusted_state import MonthlyUsageLedger, TrustedRuntimeState
 MAX_BODY_BYTES = 256 * 1024
 
 
-def _load_registry(registry_path: Path, observations_path: Path, *, require_production: bool = True) -> CapabilityRegistry:
+def _load_registry(registry_path: Path, observations_path: Path, *, require_production: bool = True, route_outcomes_path: Path | None = None, task_signature: str | None = None) -> CapabilityRegistry:
     # Re-read the operator-owned registry and measured evidence for each decision.
     snapshot = read_json(registry_path)
     observations: dict[str, Any] = {}
@@ -52,6 +52,42 @@ def _load_registry(registry_path: Path, observations_path: Path, *, require_prod
             json.dumps(observations, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()[:12]
         snapshot["snapshot_id"] = f"{snapshot.get('snapshot_id', 'registry')}-evidence-{fingerprint}"
+
+    # Route outcomes are reliability evidence, never quality or preference.
+    # Use only outcomes for the current normalized task signature and only after
+    # five observations; shrink the observed rate toward the registry's quality
+    # prior to avoid overreacting to small samples.
+    if route_outcomes_path is not None and task_signature:
+        try:
+            raw_outcomes = read_json(route_outcomes_path) if route_outcomes_path.is_file() else []
+        except Exception:
+            raw_outcomes = []
+        if isinstance(raw_outcomes, list):
+            grouped: dict[str, list[bool]] = {}
+            for item in raw_outcomes[-2000:]:
+                if not isinstance(item, dict) or item.get("task_signature") != task_signature:
+                    continue
+                route_id = item.get("route_id")
+                outcome = item.get("outcome")
+                if isinstance(route_id, str) and outcome in {"success", "failure"}:
+                    grouped.setdefault(route_id, []).append(outcome == "success")
+            for route in snapshot.get("instances", []):
+                if not isinstance(route, dict):
+                    continue
+                outcomes = grouped.get(route.get("route_id"), [])
+                if len(outcomes) < 5:
+                    continue
+                prior = route.get("quality_score", 0.5)
+                if isinstance(prior, bool) or not isinstance(prior, (int, float)) or not 0 <= prior <= 1:
+                    prior = 0.5
+                successes = sum(outcomes)
+                route["observed_success_rate"] = (successes + 5 * prior) / (len(outcomes) + 5)
+                route["observed_sample_count"] = len(outcomes)
+            if grouped:
+                fingerprint = hashlib.sha256(
+                    json.dumps({key: values[-2000:] for key, values in sorted(grouped.items())}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                ).hexdigest()[:12]
+                snapshot["snapshot_id"] = f"{snapshot.get('snapshot_id', 'registry')}-outcomes-{fingerprint}"
     return CapabilityRegistry.from_production_snapshot(snapshot) if require_production else CapabilityRegistry(snapshot)
 
 
@@ -186,13 +222,14 @@ def _apply_runtime_catalog(registry: CapabilityRegistry, request: dict[str, Any]
     return CapabilityRegistry(snapshot)
 
 
-def _decision(payload: Any, registry_path: Path, observations_path: Path, *, require_production: bool = True) -> dict[str, Any]:
+def _decision(payload: Any, registry_path: Path, observations_path: Path, *, require_production: bool = True, route_outcomes_path: Path | None = None) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("request body must be a JSON object")
     request = payload.get("request")
     if not isinstance(request, dict):
         raise ValueError("request field must be a JSON object")
-    registry = _load_registry(registry_path, observations_path, require_production=require_production)
+    task_signature = payload.get("task_signature") if isinstance(payload.get("task_signature"), str) else None
+    registry = _load_registry(registry_path, observations_path, require_production=require_production, route_outcomes_path=route_outcomes_path, task_signature=task_signature)
     if "runtime_catalog" in payload:
         registry = _apply_runtime_catalog(registry, request, payload.get("runtime_catalog"))
     # A preference is a soft ranking signal only. Resolve it to an exact route
@@ -267,6 +304,65 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
     }
 
 
+def _store_route_outcome(payload: Any, registry_path: Path, outcomes_path: Path, *, require_production: bool = True) -> dict[str, int]:
+    """Persist bounded, minimized route-level run outcomes for the existing graph."""
+    if not isinstance(payload, dict):
+        raise ValueError("outcome must be an object")
+    route_id = payload.get("route_id")
+    provider_id = payload.get("provider_id")
+    model_id = payload.get("model_id")
+    task_signature = payload.get("task_signature")
+    outcome = payload.get("outcome")
+    decision_id = payload.get("decision_id")
+    if not all(isinstance(value, str) and value.strip() for value in (route_id, provider_id, model_id, task_signature)):
+        raise ValueError("route_id, provider_id, model_id, and task_signature are required")
+    if len(route_id) > 128 or len(provider_id) > 128 or len(model_id) > 256 or len(task_signature) > 256:
+        raise ValueError("outcome identifiers exceed limits")
+    if any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_|-." for char in task_signature):
+        raise ValueError("task_signature contains unsupported characters")
+    if outcome not in {"success", "failure"}:
+        raise ValueError("outcome must be success or failure")
+    if decision_id is not None and (not isinstance(decision_id, str) or len(decision_id) > 128):
+        raise ValueError("decision_id is invalid")
+
+    registry_snapshot = read_json(registry_path)
+    registry = CapabilityRegistry.from_production_snapshot(registry_snapshot) if require_production else CapabilityRegistry(registry_snapshot)
+    authorized = any(
+        isinstance(route, dict)
+        and route.get("route_id") == route_id
+        and route.get("provider_id") == provider_id
+        and route.get("model_used") == model_id
+        for route in registry.snapshot.get("instances", [])
+    )
+    if not authorized:
+        raise ValueError("outcome route is not present in the operator-authorized registry")
+
+    outcomes: list[dict[str, Any]] = []
+    if outcomes_path.is_file():
+        try:
+            existing = read_json(outcomes_path)
+            if isinstance(existing, list):
+                outcomes = [item for item in existing if isinstance(item, dict)]
+        except Exception:
+            outcomes = []
+    outcomes.append({
+        "route_id": route_id,
+        "provider_id": provider_id,
+        "model_id": model_id,
+        "task_signature": task_signature,
+        "outcome": outcome,
+        "decision_id": decision_id if isinstance(decision_id, str) else None,
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+    })
+    outcomes = outcomes[-2000:]
+    outcomes_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temporary = outcomes_path.with_suffix(outcomes_path.suffix + ".tmp")
+    temporary.write_text(json.dumps(outcomes, separators=(",", ":"), allow_nan=False) + chr(10), encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    temporary.replace(outcomes_path)
+    return {"accepted": 1, "retained": len(outcomes)}
+
+
 def make_handler(registry_path: Path, observations_path: Path, bearer_token: str | None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "ACCE-DecisionBridge/1.0"
@@ -292,7 +388,7 @@ def make_handler(registry_path: Path, observations_path: Path, bearer_token: str
 
         def do_POST(self) -> None:
             route_path = urlparse(self.path).path
-            if route_path not in {"/v1/decide", "/v1/observations"}:
+            if route_path not in {"/v1/decide", "/v1/observations", "/v1/outcomes"}:
                 self._send(404, {"error": "not_found"})
                 return
             if bearer_token and self.headers.get("Authorization") != f"Bearer {bearer_token}":
@@ -307,8 +403,14 @@ def make_handler(registry_path: Path, observations_path: Path, bearer_token: str
                 payload = json.loads(raw.decode("utf-8"))
                 if route_path == "/v1/observations":
                     self._send(200, _store_observations(payload, observations_path))
+                elif route_path == "/v1/outcomes":
+                    outcomes_raw = os.environ.get("ACCE_ROUTE_OUTCOMES_PATH", "").strip()
+                    outcomes_path = Path(outcomes_raw).expanduser().resolve() if outcomes_raw else registry_path.with_name("acce-route-outcomes.json")
+                    self._send(200, _store_route_outcome(payload, registry_path, outcomes_path))
                 else:
-                    self._send(200, _decision(payload, registry_path, observations_path))
+                    outcomes_raw = os.environ.get("ACCE_ROUTE_OUTCOMES_PATH", "").strip()
+                    outcomes_path = Path(outcomes_raw).expanduser().resolve() if outcomes_raw else registry_path.with_name("acce-route-outcomes.json")
+                    self._send(200, _decision(payload, registry_path, observations_path, route_outcomes_path=outcomes_path))
             except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
                 self._send(400, {"error": "invalid_request", "detail": str(error)})
             except Exception as error:

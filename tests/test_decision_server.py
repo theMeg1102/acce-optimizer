@@ -8,7 +8,7 @@ import pytest
 from acce_optimizer.core.errors import ContractValidationError
 from acce_optimizer.core.engine import route_blocking_reason
 from acce_optimizer.core.models import CandidateRoute, DecisionRequest
-from acce_optimizer.core.decision_server import _apply_runtime_catalog, _decision, _load_registry, _load_trusted_state, _store_observations
+from acce_optimizer.core.decision_server import _apply_runtime_catalog, _decision, _load_registry, _load_trusted_state, _store_observations, _store_route_outcome
 
 
 def test_discovery_telemetry_updates_only_matching_configured_route(tmp_path: Path) -> None:
@@ -324,3 +324,51 @@ def test_preferred_route_id_is_optional_for_backward_compatibility() -> None:
     })
     assert request.preferred_route_id is None
     assert "preferred_route_id" not in request.normalized()
+
+
+def test_route_outcomes_are_authorized_bounded_and_task_signature_scoped(tmp_path: Path) -> None:
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    outcomes_path = tmp_path / "route-outcomes.json"
+    payload = {
+        "route_id": "local-text-generation",
+        "provider_id": "local-provider",
+        "model_id": "example-local-model",
+        "task_signature": "coding|programming",
+        "outcome": "success",
+        "decision_id": "decision-safe-id",
+    }
+    for _ in range(5):
+        assert _store_route_outcome(payload, registry_path, outcomes_path, require_production=False)["accepted"] == 1
+
+    registry = _load_registry(
+        registry_path,
+        tmp_path / "observations.json",
+        require_production=False,
+        route_outcomes_path=outcomes_path,
+        task_signature="coding|programming",
+    )
+    route = registry.candidates_for("text-generation")[0]
+    assert route.observed_sample_count == 5
+    assert route.observed_success_rate is not None
+    assert route.observed_success_rate > route.quality_score
+
+    unrelated = _load_registry(
+        registry_path,
+        tmp_path / "observations.json",
+        require_production=False,
+        route_outcomes_path=outcomes_path,
+        task_signature="research",
+    )
+    assert unrelated.candidates_for("text-generation")[0].observed_sample_count == 0
+
+
+def test_route_outcome_endpoint_rejects_unapproved_routes(tmp_path: Path) -> None:
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    with pytest.raises(ValueError, match="operator-authorized"):
+        _store_route_outcome({
+            "route_id": "invented-route",
+            "provider_id": "invented-provider",
+            "model_id": "invented-model",
+            "task_signature": "coding",
+            "outcome": "success",
+        }, registry_path, tmp_path / "outcomes.json", require_production=False)
