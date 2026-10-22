@@ -33,7 +33,9 @@ function runCli(file: string, args: string[], timeoutMs: number, signal?: AbortS
       ...(signal ? { signal } : {}),
     }, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(`OpenClaw CLI ${args.slice(0, 2).join(" ")} failed: ${String(stderr || error.message).slice(0, 500)}`));
+        const code = error && typeof error === "object" && "code" in error ? String(error.code).slice(0, 40) : "unknown";
+        // CLI stderr can contain account/provider diagnostics; never surface it in logs.
+        reject(new Error(`OpenClaw CLI ${args.slice(0, 2).join(" ")} failed (code ${code}); details omitted`));
         return;
       }
       resolve({ stdout: String(stdout), stderr: String(stderr) });
