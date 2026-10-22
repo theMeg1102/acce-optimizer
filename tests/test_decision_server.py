@@ -8,6 +8,7 @@ import pytest
 from acce_optimizer.core.errors import ContractValidationError
 from acce_optimizer.core.engine import route_blocking_reason
 from acce_optimizer.core.models import CandidateRoute, DecisionRequest
+from acce_optimizer.core.registry import CapabilityRegistry
 from acce_optimizer.core.decision_server import _apply_runtime_catalog, _apply_runtime_status, _decision, _load_registry, _load_trusted_state, _store_observations, _store_route_outcome, _store_issued_decision
 
 
@@ -484,3 +485,45 @@ def test_missing_or_stale_runtime_status_fails_closed_only_when_required(tmp_pat
         "usage": [],
     }
     assert _apply_runtime_status(registry, stale, required=True).candidates_for("text-generation") == []
+
+
+def test_runtime_usage_filters_exhausted_or_unmetered_cloud_routes(tmp_path: Path) -> None:
+    from datetime import datetime, timezone
+
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    registry = _load_registry(registry_path, tmp_path / "observations.json", require_production=False)
+    snapshot = registry.snapshot
+    cloud_route = dict(snapshot["instances"][0])
+    cloud_route.update({
+        "route_id": "cloud-text-generation",
+        "instance_id": "cloud-example",
+        "provider_id": "cloud-provider",
+        "resource_type": "cloud_model",
+        "model_used": "cloud-model",
+        "quota_metered": True,
+        "estimated_cloud_cost_usd": 0.02,
+        "monetary_metered": True,
+    })
+    snapshot["instances"].append(cloud_route)
+    registry = CapabilityRegistry(snapshot)
+    captured_at = datetime.now(timezone.utc).isoformat()
+    status = {
+        "modelsCapturedAt": captured_at,
+        "usageCapturedAt": captured_at,
+        "models": [
+            {"providerId": "local-provider", "modelId": "example-local-model", "available": True},
+            {"providerId": "cloud-provider", "modelId": "cloud-model", "available": True},
+        ],
+        "usage": [{"providerId": "cloud-provider", "remainingFraction": 0.25}],
+    }
+    admitted = _apply_runtime_status(registry, status, required=True)
+    routes = {route.route_id: route for route in admitted.candidates_for("text-generation")}
+    assert routes["cloud-text-generation"].runtime_quota_remaining_fraction == pytest.approx(0.25)
+
+    status["usage"] = [{"providerId": "cloud-provider", "remainingFraction": 0.0}]
+    exhausted = _apply_runtime_status(registry, status, required=True)
+    assert "cloud-text-generation" not in {route.route_id for route in exhausted.candidates_for("text-generation")}
+
+    status["usageCapturedAt"] = ""
+    stale = _apply_runtime_status(registry, status, required=True)
+    assert "cloud-text-generation" not in {route.route_id for route in stale.candidates_for("text-generation")}
