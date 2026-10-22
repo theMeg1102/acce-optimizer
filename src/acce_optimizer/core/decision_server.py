@@ -246,6 +246,17 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
             if preferred is not None:
                 request = dict(request)
                 request["preferred_route_id"] = preferred.get("route_id")
+    preferred_order = payload.get("preferred_route_order")
+    if isinstance(preferred_order, list):
+        authorized_route_ids = {
+            route.get("route_id") for route in registry.snapshot.get("instances", [])
+            if isinstance(route, dict) and isinstance(route.get("route_id"), str)
+        }
+        request = dict(request)
+        request["preferred_route_order"] = [
+            route_id for route_id in preferred_order
+            if isinstance(route_id, str) and route_id in authorized_route_ids
+        ][:100]
     trusted_state = _load_trusted_state()
     request_data = dict(request)
     constraints = request_data.get("constraints")

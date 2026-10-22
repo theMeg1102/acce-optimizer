@@ -140,6 +140,7 @@ class DecisionRequest:
     context_compaction_enabled: bool
     context_compaction_in_progress: bool
     preferred_route_id: str | None = None
+    preferred_route_order: tuple[str, ...] = ()
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "DecisionRequest":
@@ -217,6 +218,7 @@ class DecisionRequest:
         return cls(
             request_id=_required_text(data, "request_id"),
             preferred_route_id=_optional_text(data.get("preferred_route_id"), "preferred_route_id"),
+            preferred_route_order=_text_list(data.get("preferred_route_order", []), "preferred_route_order"),
             task_class=_required_text(data, "task_class"),
             summary=summary,
             required_capabilities=_text_list(data.get("required_capabilities", []), "required_capabilities"),
@@ -293,6 +295,7 @@ class DecisionRequest:
         return {
             "request_id": self.request_id,
             **({"preferred_route_id": self.preferred_route_id} if self.preferred_route_id else {}),
+            **({"preferred_route_order": list(self.preferred_route_order)} if self.preferred_route_order else {}),
             "task_class": self.task_class,
             "summary": self.summary,
             "required_capabilities": list(self.required_capabilities),

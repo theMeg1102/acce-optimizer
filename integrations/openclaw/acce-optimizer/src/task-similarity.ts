@@ -6,6 +6,7 @@ export type TaskObservation = {
   outcome?: "success" | "failure" | "unknown";
   decisionId?: string;
   selectedRoute?: { routeId: string; providerId: string; modelId: string };
+  rankedRoutes?: string[];
   preference?: string;
 };
 

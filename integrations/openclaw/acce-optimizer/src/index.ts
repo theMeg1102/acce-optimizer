@@ -78,9 +78,11 @@ export default defineFeaturePlugin({
       // operators can accumulate history without allowing model overrides.
       const taskProfile = deriveTaskProfile(event.prompt);
       let patternConsensus = evaluateSimilarityWindow(taskProfile.categories, [], { threshold: config.similarityThreshold ?? 0.8 });
+      let learnedRouteOrder: string[] | undefined;
       try {
         const recorded = await taskHistory.recordAndEvaluateWithId(taskProfile.categories, config.similarityThreshold ?? 0.8);
         patternConsensus = recorded.consensus;
+        if (patternConsensus.eligible) learnedRouteOrder = await taskHistory.getSuccessfulTemplate(taskProfile.categories);
         if (typeof ctx.runId === "string" && ctx.runId.length > 0) {
           runObservations.set(ctx.runId, { observationId: recorded.observationId, taskSignature: taskProfile.categories.slice().sort().join("|") });
           while (runObservations.size > 1000) {
@@ -119,6 +121,7 @@ export default defineFeaturePlugin({
           // with its operator-authorized registry before graph construction.
           runtime_catalog: runtimeModels.map((model) => ({ providerId: model.providerId, modelId: model.modelId, ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}), ...(model.contextTokens ? { contextTokens: model.contextTokens } : {}), ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}), ...(model.cost ? { cost: model.cost } : {}) })),
           task_signature: taskProfile.categories.slice().sort().join("|"),
+          ...(learnedRouteOrder ? { preferred_route_order: learnedRouteOrder } : {}),
           ...(config.preferredRoutes?.[taskProfile.taskClass] ? { preference: config.preferredRoutes[taskProfile.taskClass] } : {}),
           task_class: taskProfile.taskClass,
           summary: `${taskProfile.summary}; historical_pattern=${patternConsensus.eligible ? "eligible" : "not-established"}; matching_fraction=${patternConsensus.matchingFraction.toFixed(4)}`,
@@ -172,6 +175,7 @@ export default defineFeaturePlugin({
               routeId: selectedRoute.route_id,
               providerId: decision.providerOverride,
               modelId: decision.modelOverride,
+              rankedRoutes: (decision.ranking_result ?? []).map((item) => item.route_id).filter((routeId): routeId is string => typeof routeId === "string"),
             }).then((recorded) => {
               if (!recorded) api.logger.warn(JSON.stringify({ event: "acce.learning.route_attribution_missing", action: "keep_observation_unattributed" }));
             }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.learning.route_attribution_failed", error: safeError(error) })));

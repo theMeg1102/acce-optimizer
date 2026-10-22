@@ -22,8 +22,10 @@ describe("ACCE task outcome attribution", () => {
       routeId: "route-local",
       providerId: "local-provider",
       modelId: "model-a",
+      rankedRoutes: ["route-local", "route-cloud"],
     })).toBe(true);
     expect(await store.recordOutcome(recorded.observationId, "success")).toBe(true);
+    await expect(store.getSuccessfulTemplate(["coding"])).resolves.toEqual(["route-local", "route-cloud"]);
     expect(await store.recordOutcome("missing-observation", "failure")).toBe(false);
     const history = JSON.parse(await readFile(path, "utf8")) as Array<{ observationId?: string; signature: string; outcome?: string; decisionId?: string; selectedRoute?: { routeId: string; providerId: string; modelId: string } }>;
     expect(history).toHaveLength(1);

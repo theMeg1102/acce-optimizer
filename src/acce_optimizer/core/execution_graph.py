@@ -10,6 +10,7 @@ from .models import CandidateRoute, DecisionRequest
 from .resource_state import ResourceState
 from .engine import route_blocking_reason
 from .routing_policy import (
+    route_preference_penalty,
     RoutingPolicy,
     cloud_override_allowed,
     effective_edge_cost,
@@ -223,22 +224,25 @@ def search_execution_graph(
     algorithm: str = "astar",
     max_explored_nodes: int = 10_000,
     preferred_route_id: str | None = None,
+    preferred_route_order: tuple[str, ...] = (),
 ) -> AdaptiveSearchResult:
     """Optimize the governed graph with deterministic dynamic edge costs."""
 
-    preferred_route_admitted = preferred_route_id is not None and any(
-        route.route_id == preferred_route_id for route in graph.route_by_node.values()
-    )
+    admitted_route_ids = {route.route_id for route in graph.route_by_node.values()}
 
     def edge_cost(edge: GraphEdge) -> float:
         target = next(node for node in graph.snapshot.nodes if node.node_id == edge.target)
         estimate = graph.estimate_by_node.get(edge.target)
         cost = effective_edge_cost(edge, target, resources, estimate, policy)
         route = graph.route_by_node.get(edge.target)
-        # Explicit preferences are a soft tie-break influence only after the
-        # route has passed all hard governance filters.
-        if preferred_route_admitted and route is not None and route.route_id != preferred_route_id:
-            cost += policy.explicit_preference_penalty
+        if route is not None:
+            cost += route_preference_penalty(
+                route.route_id,
+                admitted_route_ids,
+                preferred_route_id=preferred_route_id,
+                preferred_route_order=preferred_route_order,
+                policy=policy,
+            )
         return cost
 
     if algorithm == "dijkstra":

@@ -43,17 +43,31 @@ export function createTaskHistoryStore(path: string) {
       queue = operation.then(() => undefined, () => undefined);
       return operation;
     },
-    async recordDecision(observationId: string, decision: { decisionId: string; routeId: string; providerId: string; modelId: string }): Promise<boolean> {
+    async recordDecision(observationId: string, decision: { decisionId: string; routeId: string; providerId: string; modelId: string; rankedRoutes?: string[] }): Promise<boolean> {
       const operation = queue.then(async () => {
         const history = await loadUnlocked();
         const index = history.findIndex((item) => item.observationId === observationId);
         if (index < 0) return false;
-        const updated = history.map((item, itemIndex) => itemIndex === index ? { ...item, decisionId: decision.decisionId, selectedRoute: { routeId: decision.routeId, providerId: decision.providerId, modelId: decision.modelId } } : item);
+        const updated = history.map((item, itemIndex) => itemIndex === index ? { ...item, decisionId: decision.decisionId, selectedRoute: { routeId: decision.routeId, providerId: decision.providerId, modelId: decision.modelId }, ...(decision.rankedRoutes?.length ? { rankedRoutes: decision.rankedRoutes.slice(0, 100) } : {}) } : item);
         await saveUnlocked(updated);
         return true;
       });
       queue = operation.then(() => undefined, () => undefined);
       return operation;
+    },
+    async getSuccessfulTemplate(categories: readonly string[]): Promise<string[] | undefined> {
+      const operation = queue.then(async () => {
+        const history = await loadUnlocked();
+        const signature = categories.map((item) => item.trim().toLowerCase()).filter(Boolean).filter((item, index, all) => all.indexOf(item) === index).sort().join("|") || "general";
+        const match = [...history].reverse().find((item) =>
+          item.signature === signature && item.outcome === "success" &&
+          Array.isArray(item.rankedRoutes) && item.rankedRoutes.length > 0
+        );
+        return match?.rankedRoutes?.filter((route): route is string => typeof route === "string" && route.length > 0).slice(0, 100);
+      });
+      queue = operation.then(() => undefined, () => undefined);
+      const template = await operation;
+      return template?.length ? template : undefined;
     },
     async recordOutcome(observationId: string, outcome: "success" | "failure"): Promise<boolean> {
       const operation = queue.then(async () => {

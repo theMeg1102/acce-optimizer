@@ -372,3 +372,14 @@ def test_route_outcome_endpoint_rejects_unapproved_routes(tmp_path: Path) -> Non
             "task_signature": "coding",
             "outcome": "success",
         }, registry_path, tmp_path / "outcomes.json", require_production=False)
+
+
+def test_preferred_route_order_is_normalized_as_a_bounded_tuple() -> None:
+    request = DecisionRequest.from_mapping({
+        "request_id": "route-template",
+        "task_class": "coding",
+        "summary": "coding task",
+        "preferred_route_order": ["route-a", "route-b"],
+    })
+    assert request.preferred_route_order == ("route-a", "route-b")
+    assert request.normalized()["preferred_route_order"] == ["route-a", "route-b"]

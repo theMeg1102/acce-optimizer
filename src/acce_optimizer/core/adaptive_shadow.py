@@ -8,7 +8,7 @@ from .execution_graph import build_execution_graph, search_execution_graph, task
 from .models import DecisionRequest
 from .registry import CapabilityRegistry
 from .resource_state import ResourceState
-from .routing_policy import RoutingPolicy, effective_edge_cost
+from .routing_policy import RoutingPolicy, effective_edge_cost, route_preference_penalty
 
 
 def adaptive_shadow_compare(
@@ -59,9 +59,7 @@ def adaptive_shadow_compare(
         routing_policy,
     )
     node_by_id = {node.node_id: node for node in graph.snapshot.nodes}
-    preferred_route_admitted = request.preferred_route_id is not None and any(
-        route.route_id == request.preferred_route_id for route in graph.route_by_node.values()
-    )
+    admitted_route_ids = {route.route_id for route in graph.route_by_node.values()}
     ranked: list[dict[str, Any]] = []
     for edge in graph.snapshot.edges:
         if edge.source != graph.start_node or edge.target not in graph.route_by_node:
@@ -70,8 +68,13 @@ def adaptive_shadow_compare(
         node = node_by_id[edge.target]
         estimate = graph.estimate_by_node.get(edge.target)
         effective_cost = effective_edge_cost(edge, node, resources, estimate, routing_policy)
-        if preferred_route_admitted and route.route_id != request.preferred_route_id:
-            effective_cost += routing_policy.explicit_preference_penalty
+        effective_cost += route_preference_penalty(
+            route.route_id,
+            admitted_route_ids,
+            preferred_route_id=request.preferred_route_id,
+            preferred_route_order=request.preferred_route_order,
+            policy=routing_policy,
+        )
         ranked.append({
             "route_id": route.route_id,
             "provider_id": route.provider_id,
@@ -109,6 +112,7 @@ def adaptive_shadow_compare(
                 algorithm="astar",
                 max_explored_nodes=max(request.search_budget_max_candidate_routes, 1),
                 preferred_route_id=request.preferred_route_id,
+                preferred_route_order=request.preferred_route_order,
             )
             adaptive_route_id = result.selected_route.route_id
             adaptive_cost = result.search.total_cost

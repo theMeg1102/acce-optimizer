@@ -181,6 +181,27 @@ def cloud_override_allowed(
     return expected_advantage >= threshold
 
 
+def route_preference_penalty(
+    route_id: str,
+    admitted_route_ids: set[str],
+    *,
+    preferred_route_id: str | None,
+    preferred_route_order: tuple[str, ...],
+    policy: RoutingPolicy,
+) -> float:
+    """Return a soft preference penalty; callers apply it only to admitted routes."""
+    if preferred_route_id and preferred_route_id in admitted_route_ids:
+        return 0.0 if route_id == preferred_route_id else policy.explicit_preference_penalty
+    admitted_template = [item for item in preferred_route_order if item in admitted_route_ids]
+    if not admitted_template:
+        return 0.0
+    try:
+        rank = admitted_template.index(route_id)
+        return rank * policy.explicit_preference_penalty
+    except ValueError:
+        return (len(admitted_template) + 1) * policy.explicit_preference_penalty
+
+
 def effective_edge_cost(
     edge: GraphEdge,
     target: GraphNode,

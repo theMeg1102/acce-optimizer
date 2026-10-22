@@ -95,12 +95,13 @@ export function createDecisionClient(params: {
           method: "POST",
           headers: headers(),
           body: JSON.stringify((() => {
-            const { runtime_catalog, preference, task_signature, ...decisionRequest } = request;
+            const { runtime_catalog, preference, task_signature, preferred_route_order, ...decisionRequest } = request;
             return {
               request: decisionRequest,
               ...(runtime_catalog !== undefined ? { runtime_catalog } : {}),
               ...(preference !== undefined ? { preference } : {}),
               ...(task_signature !== undefined ? { task_signature } : {}),
+              ...(preferred_route_order !== undefined ? { preferred_route_order } : {}),
             };
           })()),
           signal: controller.signal,
