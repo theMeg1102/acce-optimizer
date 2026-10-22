@@ -161,8 +161,15 @@ def _apply_runtime_catalog(registry: CapabilityRegistry, request: dict[str, Any]
         cost = runtime_model.get("cost")
         input_price = cost.get("input") if isinstance(cost, dict) else None
         output_price = cost.get("output") if isinstance(cost, dict) else None
+        cache_pricing_unmodeled = isinstance(cost, dict) and any(
+            isinstance(cost.get(field), (int, float))
+            and not isinstance(cost.get(field), bool)
+            and cost.get(field) > 0
+            for field in ("cacheRead", "cacheWrite")
+        )
         if (
             valid_token_estimates
+            and not cache_pricing_unmodeled
             and isinstance(input_price, (int, float)) and not isinstance(input_price, bool) and input_price >= 0
             and isinstance(output_price, (int, float)) and not isinstance(output_price, bool) and output_price >= 0
         ):

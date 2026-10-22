@@ -280,3 +280,21 @@ def test_runtime_price_does_not_treat_missing_token_estimates_as_free(tmp_path: 
     route = result.snapshot["instances"][0]
     assert route["estimated_cloud_cost_usd"] == original_cost
     assert route["monetary_metered"] is False
+
+
+def test_runtime_price_with_unmodeled_cache_rates_preserves_registry_estimate(tmp_path: Path) -> None:
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    registry = _load_registry(registry_path, tmp_path / "observations.json", require_production=False)
+    original = registry.snapshot["instances"][0]
+    original_cost = original["estimated_cloud_cost_usd"]
+    result = _apply_runtime_catalog(registry, {
+        "context_estimated_input_tokens": 1000,
+        "context_expected_output_tokens": 500,
+    }, [{
+        "providerId": "local-provider",
+        "modelId": "example-local-model",
+        "cost": {"input": 2.0, "output": 10.0, "cacheRead": 0.5},
+    }])
+    route = result.snapshot["instances"][0]
+    assert route["estimated_cloud_cost_usd"] == original_cost
+    assert route["monetary_metered"] is False
