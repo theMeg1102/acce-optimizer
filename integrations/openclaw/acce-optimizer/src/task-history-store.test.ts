@@ -17,13 +17,21 @@ describe("ACCE task outcome attribution", () => {
     const store = createTaskHistoryStore(path);
     const recorded = await store.recordAndEvaluateWithId(["coding"]);
     expect(recorded.observationId).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(await store.recordDecision(recorded.observationId, {
+      decisionId: "decision-123",
+      routeId: "route-local",
+      providerId: "local-provider",
+      modelId: "model-a",
+    })).toBe(true);
     expect(await store.recordOutcome(recorded.observationId, "success")).toBe(true);
     expect(await store.recordOutcome("missing-observation", "failure")).toBe(false);
-    const history = JSON.parse(await readFile(path, "utf8")) as Array<{ observationId?: string; signature: string; outcome?: string }>;
+    const history = JSON.parse(await readFile(path, "utf8")) as Array<{ observationId?: string; signature: string; outcome?: string; decisionId?: string; selectedRoute?: { routeId: string; providerId: string; modelId: string } }>;
     expect(history).toHaveLength(1);
     expect(history[0]?.signature).toBe("coding");
     expect(history[0]?.observationId).toBe(recorded.observationId);
     expect(history[0]?.outcome).toBe("success");
+    expect(history[0]?.decisionId).toBe("decision-123");
+    expect(history[0]?.selectedRoute).toEqual({ routeId: "route-local", providerId: "local-provider", modelId: "model-a" });
     expect(JSON.stringify(history)).not.toContain("sessionKey");
     expect(JSON.stringify(history)).not.toContain("runId");
   });

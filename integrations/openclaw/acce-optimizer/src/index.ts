@@ -60,7 +60,7 @@ export default defineFeaturePlugin({
     const config = (api.pluginConfig ?? {}) as AccePluginConfig;
     const taskHistory = createTaskHistoryStore(resolveStorePath(config.similarityHistoryPath ?? "~/.openclaw/acce-optimizer-data/task-history.json"));
     // Correlation ids are transient in-memory only; persistent history stores a random observation id, never a run/session id.
-    const runObservations = new Map<string, string>();
+    const runObservations = new Map<string, { observationId: string; decisionId?: string; routeId?: string; providerId?: string; modelId?: string }>();
     const runtimeModels = readConfiguredRuntimeModels(api.config);
     api.logger.info(JSON.stringify({ event: "acce.runtime.catalog_observed", source: "openclaw-effective-config", modelCount: runtimeModels.length, pricedModelCount: runtimeModels.filter((model) => model.cost !== undefined).length }));
 
@@ -80,7 +80,7 @@ export default defineFeaturePlugin({
         const recorded = await taskHistory.recordAndEvaluateWithId(taskProfile.categories, config.similarityThreshold ?? 0.8);
         patternConsensus = recorded.consensus;
         if (typeof ctx.runId === "string" && ctx.runId.length > 0) {
-          runObservations.set(ctx.runId, recorded.observationId);
+          runObservations.set(ctx.runId, { observationId: recorded.observationId });
           while (runObservations.size > 1000) {
             const oldest = runObservations.keys().next().value;
             if (typeof oldest !== "string") break;
@@ -155,6 +155,24 @@ export default defineFeaturePlugin({
           }));
           return;
         }
+        const selectedRoute = decision.selected_route;
+        if (typeof ctx.runId === "string" && ctx.runId.length > 0 && selectedRoute?.route_id) {
+          const observation = runObservations.get(ctx.runId);
+          if (observation) {
+            observation.decisionId = typeof decision.decision_id === "string" ? decision.decision_id : undefined;
+            observation.routeId = selectedRoute.route_id;
+            observation.providerId = decision.providerOverride;
+            observation.modelId = decision.modelOverride;
+            void taskHistory.recordDecision(observation.observationId, {
+              decisionId: observation.decisionId ?? "unknown",
+              routeId: selectedRoute.route_id,
+              providerId: decision.providerOverride,
+              modelId: decision.modelOverride,
+            }).then((recorded) => {
+              if (!recorded) api.logger.warn(JSON.stringify({ event: "acce.learning.route_attribution_missing", action: "keep_observation_unattributed" }));
+            }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.learning.route_attribution_failed", error: safeError(error) })));
+          }
+        }
         api.logger.info(JSON.stringify({
           event: "acce.decision.route_selected",
           decisionId: decision.decision_id ?? null,
@@ -183,12 +201,12 @@ export default defineFeaturePlugin({
     api.on("agent_end", (event, ctx) => {
       const runId = typeof event.runId === "string" ? event.runId : typeof ctx.runId === "string" ? ctx.runId : undefined;
       if (!runId) return;
-      const observationId = runObservations.get(runId);
+      const observation = runObservations.get(runId);
       if (!observationId) return;
       runObservations.delete(runId);
       const outcome = typeof event.success === "boolean" ? (event.success ? "success" : "failure") : undefined;
       if (!outcome) return;
-      void taskHistory.recordOutcome(observationId, outcome).then((updated) => {
+      void taskHistory.recordOutcome(observation.observationId, outcome).then((updated) => {
         api.logger.info(JSON.stringify({ event: "acce.learning.outcome_recorded", attributed: updated, outcome }));
       }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.learning.outcome_unavailable", error: safeError(error) })));
     });

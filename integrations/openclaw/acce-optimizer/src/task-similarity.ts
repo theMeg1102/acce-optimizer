@@ -4,6 +4,8 @@ export type TaskObservation = {
   categories: string[];
   observedAt: string;
   outcome?: "success" | "failure" | "unknown";
+  decisionId?: string;
+  selectedRoute?: { routeId: string; providerId: string; modelId: string };
   preference?: string;
 };
 

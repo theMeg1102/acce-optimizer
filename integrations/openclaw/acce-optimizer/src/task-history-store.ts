@@ -43,6 +43,18 @@ export function createTaskHistoryStore(path: string) {
       queue = operation.then(() => undefined, () => undefined);
       return operation;
     },
+    async recordDecision(observationId: string, decision: { decisionId: string; routeId: string; providerId: string; modelId: string }): Promise<boolean> {
+      const operation = queue.then(async () => {
+        const history = await loadUnlocked();
+        const index = history.findIndex((item) => item.observationId === observationId);
+        if (index < 0) return false;
+        const updated = history.map((item, itemIndex) => itemIndex === index ? { ...item, decisionId: decision.decisionId, selectedRoute: { routeId: decision.routeId, providerId: decision.providerId, modelId: decision.modelId } } : item);
+        await saveUnlocked(updated);
+        return true;
+      });
+      queue = operation.then(() => undefined, () => undefined);
+      return operation;
+    },
     async recordOutcome(observationId: string, outcome: "success" | "failure"): Promise<boolean> {
       const operation = queue.then(async () => {
         const history = await loadUnlocked();
