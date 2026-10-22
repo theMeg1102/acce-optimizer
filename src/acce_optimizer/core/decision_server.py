@@ -267,8 +267,10 @@ def _apply_runtime_catalog(registry: CapabilityRegistry, request: dict[str, Any]
                 runtime_by_pair[pair] = item
 
     request_context = request.get("context") if isinstance(request.get("context"), dict) else {}
-    request_tokens_in = request.get("context_estimated_input_tokens", request_context.get("estimated_input_tokens", 0))
-    request_tokens_out = request.get("context_expected_output_tokens", request_context.get("expected_output_tokens", 0))
+    constraints = request.get("constraints") if isinstance(request.get("constraints"), dict) else {}
+    context_budget = constraints.get("context_budget") if isinstance(constraints.get("context_budget"), dict) else {}
+    request_tokens_in = request.get("context_estimated_input_tokens", request_context.get("estimated_input_tokens", context_budget.get("estimated_input_tokens", 0)))
+    request_tokens_out = request.get("context_expected_output_tokens", request_context.get("expected_output_tokens", context_budget.get("expected_output_tokens", 0)))
     valid_token_estimates = (
         isinstance(request_tokens_in, int) and not isinstance(request_tokens_in, bool) and request_tokens_in > 0
         and isinstance(request_tokens_out, int) and not isinstance(request_tokens_out, bool) and request_tokens_out > 0
@@ -282,6 +284,14 @@ def _apply_runtime_catalog(registry: CapabilityRegistry, request: dict[str, Any]
         if pair not in allowed_pairs:
             continue
         runtime_model = runtime_by_pair[pair]
+        runtime_max_output = runtime_model.get("maxTokens")
+        if (
+            isinstance(request_tokens_out, int) and not isinstance(request_tokens_out, bool) and request_tokens_out > 0
+            and isinstance(runtime_max_output, int) and not isinstance(runtime_max_output, bool) and runtime_max_output > 0
+            and request_tokens_out > runtime_max_output
+        ):
+            # Do not silently clip a task's required output to fit a model cap.
+            continue
         # OpenClaw's effective context cap is a hard runtime constraint.
         # Use the more conservative of the governed registry and configured
         # runtime cap; never enlarge the operator's admitted context window.

@@ -527,3 +527,21 @@ def test_runtime_usage_filters_exhausted_or_unmetered_cloud_routes(tmp_path: Pat
     status["usageCapturedAt"] = ""
     stale = _apply_runtime_status(registry, status, required=True)
     assert "cloud-text-generation" not in {route.route_id for route in stale.candidates_for("text-generation")}
+
+
+def test_runtime_max_output_cap_rejects_routes_that_cannot_meet_task_budget(tmp_path: Path) -> None:
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    registry = _load_registry(registry_path, tmp_path / "observations.json", require_production=False)
+    request = {"constraints": {"context_budget": {"estimated_input_tokens": 1000, "expected_output_tokens": 4096}}}
+    admitted = _apply_runtime_catalog(registry, request, [{
+        "providerId": "local-provider", "modelId": "example-local-model",
+        "maxTokens": 2048, "cost": {"input": 2.0, "output": 10.0},
+    }])
+    assert admitted.snapshot["instances"] == []
+
+    admitted = _apply_runtime_catalog(registry, request, [{
+        "providerId": "local-provider", "modelId": "example-local-model",
+        "maxTokens": 8192, "cost": {"input": 2.0, "output": 10.0},
+    }])
+    assert admitted.snapshot["instances"][0]["route_id"] == "local-text-generation"
+    assert admitted.snapshot["instances"][0]["estimated_cloud_cost_usd"] == pytest.approx(0.04296)
