@@ -106,6 +106,79 @@ def _load_trusted_state() -> TrustedRuntimeState | None:
         return None
 
 
+def _apply_runtime_catalog(registry: CapabilityRegistry, request: dict[str, Any], runtime_catalog: Any) -> CapabilityRegistry:
+    """Intersect the validated operator registry with OpenClaw's live catalog.
+
+    OpenClaw supplies runtime configuration facts; ACCE still owns route
+    authorization and ranking. This function can remove routes but never add
+    or authorize one. Runtime prices are used only with explicit positive token
+    estimates and complete input/output price metadata.
+    """
+    allowed_pairs: set[tuple[str, str]] = set()
+    runtime_by_pair: dict[tuple[str, str], dict[str, Any]] = {}
+    if isinstance(runtime_catalog, list):
+        for item in runtime_catalog:
+            if not isinstance(item, dict):
+                continue
+            provider_id = item.get("providerId")
+            model_id = item.get("modelId")
+            if isinstance(provider_id, str) and provider_id.strip() and isinstance(model_id, str) and model_id.strip():
+                pair = (provider_id.strip(), model_id.strip())
+                allowed_pairs.add(pair)
+                runtime_by_pair[pair] = item
+
+    request_context = request.get("context") if isinstance(request.get("context"), dict) else {}
+    request_tokens_in = request.get("context_estimated_input_tokens", request_context.get("estimated_input_tokens", 0))
+    request_tokens_out = request.get("context_expected_output_tokens", request_context.get("expected_output_tokens", 0))
+    valid_token_estimates = (
+        isinstance(request_tokens_in, int) and not isinstance(request_tokens_in, bool) and request_tokens_in > 0
+        and isinstance(request_tokens_out, int) and not isinstance(request_tokens_out, bool) and request_tokens_out > 0
+    )
+    snapshot = registry.snapshot
+    filtered_routes = []
+    for route in snapshot.get("instances", []):
+        if not isinstance(route, dict):
+            continue
+        pair = (route.get("provider_id"), route.get("model_used"))
+        if pair not in allowed_pairs:
+            continue
+        runtime_model = runtime_by_pair[pair]
+        # OpenClaw's effective context cap is a hard runtime constraint.
+        # Use the more conservative of the governed registry and configured
+        # runtime cap; never enlarge the operator's admitted context window.
+        runtime_context = runtime_model.get("contextTokens")
+        if not isinstance(runtime_context, (int, float)) or isinstance(runtime_context, bool) or runtime_context <= 0:
+            runtime_context = runtime_model.get("contextWindow")
+        if isinstance(runtime_context, (int, float)) and not isinstance(runtime_context, bool) and runtime_context > 0:
+            governed_context = route.get("context_window_tokens")
+            route["context_window_tokens"] = (
+                min(governed_context, int(runtime_context))
+                if isinstance(governed_context, int) and not isinstance(governed_context, bool) and governed_context > 0
+                else int(runtime_context)
+            )
+        # OpenClaw prices are USD per million tokens. Missing prices or token
+        # estimates preserve the registry estimate; they are never treated as $0.
+        cost = runtime_model.get("cost")
+        input_price = cost.get("input") if isinstance(cost, dict) else None
+        output_price = cost.get("output") if isinstance(cost, dict) else None
+        if (
+            valid_token_estimates
+            and isinstance(input_price, (int, float)) and not isinstance(input_price, bool) and input_price >= 0
+            and isinstance(output_price, (int, float)) and not isinstance(output_price, bool) and output_price >= 0
+        ):
+            route["estimated_cloud_cost_usd"] = (request_tokens_in * input_price + request_tokens_out * output_price) / 1_000_000
+            route["monetary_metered"] = True
+        filtered_routes.append(route)
+
+    snapshot["instances"] = filtered_routes
+    catalog_fingerprint = hashlib.sha256(
+        json.dumps(sorted(allowed_pairs), separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:12]
+    snapshot["snapshot_id"] = f"{snapshot.get('snapshot_id', 'registry')}-runtime-{catalog_fingerprint}"
+    # The source registry has already passed its strict production contract.
+    return CapabilityRegistry(snapshot)
+
+
 def _decision(payload: Any, registry_path: Path, observations_path: Path, *, require_production: bool = True) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("request body must be a JSON object")
@@ -113,68 +186,8 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
     if not isinstance(request, dict):
         raise ValueError("request field must be a JSON object")
     registry = _load_registry(registry_path, observations_path, require_production=require_production)
-    # OpenClaw's effective configured catalog is an input to ACCE's candidate
-    # construction, not a ranking authority. Validate the operator registry
-    # first, then derive a per-request view containing only exact provider/model
-    # pairs configured in the current Gateway snapshot. Missing/empty catalog
-    # must not let a stale registry route win and then fail late in the hook.
     if "runtime_catalog" in payload:
-        catalog = payload.get("runtime_catalog")
-        allowed_pairs: set[tuple[str, str]] = set()
-        runtime_by_pair: dict[tuple[str, str], dict[str, Any]] = {}
-        if isinstance(catalog, list):
-            for item in catalog:
-                if not isinstance(item, dict):
-                    continue
-                provider_id = item.get("providerId")
-                model_id = item.get("modelId")
-                if isinstance(provider_id, str) and provider_id.strip() and isinstance(model_id, str) and model_id.strip():
-                    pair = (provider_id.strip(), model_id.strip())
-                    allowed_pairs.add(pair)
-                    runtime_by_pair[pair] = item
-        snapshot = registry.snapshot
-        filtered_routes = []
-        request_context = request.get("context") if isinstance(request.get("context"), dict) else {}
-        request_tokens_in = request.get("context_estimated_input_tokens", request_context.get("estimated_input_tokens", 0))
-        request_tokens_out = request.get("context_expected_output_tokens", request_context.get("expected_output_tokens", 0))
-        valid_token_estimates = (
-            isinstance(request_tokens_in, int) and not isinstance(request_tokens_in, bool) and request_tokens_in > 0
-            and isinstance(request_tokens_out, int) and not isinstance(request_tokens_out, bool) and request_tokens_out > 0
-        )
-        for route in snapshot.get("instances", []):
-            if not isinstance(route, dict):
-                continue
-            pair = (route.get("provider_id"), route.get("model_used"))
-            if pair not in allowed_pairs:
-                continue
-            runtime_model = runtime_by_pair[pair]
-            # OpenClaw's effective context cap is a hard runtime constraint.
-            # Use the more conservative of the governed registry and configured
-            # runtime cap; never enlarge the operator's admitted context window.
-            runtime_context = runtime_model.get("contextTokens")
-            if not isinstance(runtime_context, (int, float)) or isinstance(runtime_context, bool) or runtime_context <= 0:
-                runtime_context = runtime_model.get("contextWindow")
-            if isinstance(runtime_context, (int, float)) and not isinstance(runtime_context, bool) and runtime_context > 0:
-                governed_context = route.get("context_window_tokens")
-                route["context_window_tokens"] = min(governed_context, int(runtime_context)) if isinstance(governed_context, int) and not isinstance(governed_context, bool) and governed_context > 0 else int(runtime_context)
-            # OpenClaw prices are USD per million tokens. Apply them only when
-            # both price fields and positive token estimates exist. Otherwise
-            # preserve the registry estimate; missing price is not $0.
-            cost = runtime_model.get("cost")
-            input_price = cost.get("input") if isinstance(cost, dict) else None
-            output_price = cost.get("output") if isinstance(cost, dict) else None
-            if valid_token_estimates and isinstance(input_price, (int, float)) and not isinstance(input_price, bool) and input_price >= 0 and isinstance(output_price, (int, float)) and not isinstance(output_price, bool) and output_price >= 0:
-                route["estimated_cloud_cost_usd"] = (request_tokens_in * input_price + request_tokens_out * output_price) / 1_000_000
-                route["monetary_metered"] = True
-            filtered_routes.append(route)
-        snapshot["instances"] = filtered_routes
-        catalog_fingerprint = hashlib.sha256(
-            json.dumps(sorted(allowed_pairs), separators=(",", ":")).encode("utf-8")
-        ).hexdigest()[:12]
-        snapshot["snapshot_id"] = f"{snapshot.get('snapshot_id', 'registry')}-runtime-{catalog_fingerprint}"
-        # The source registry has already passed its strict production contract;
-        # this derived view can only remove routes, never authorize new ones.
-        registry = CapabilityRegistry(snapshot)
+        registry = _apply_runtime_catalog(registry, request, payload.get("runtime_catalog"))
     trusted_state = _load_trusted_state()
     request_data = dict(request)
     constraints = request_data.get("constraints")
