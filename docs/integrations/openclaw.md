@@ -49,7 +49,7 @@ Operators can set preferredRoutes in plugin configuration, keyed by task class a
 
 ## Runtime telemetry
 
-The adapter observes OpenClaw's supported model_call_started, model_call_ended, and llm_output hooks. Only bounded provider/model identifiers, duration/outcome, request hash where supplied by OpenClaw, and aggregate token counts are retained in logs. The bridge accepts latency evidence for matching pre-authorized routes only. These hooks do not establish provider quota or authoritative billing totals.
+The adapter observes OpenClaw's supported model_call_started, model_call_ended, and llm_output hooks. Only bounded provider/model identifiers, duration/outcome, request hash where supplied by OpenClaw, aggregate token counts, and effective context budget are retained. The bridge merges per-model latency/context evidence for matching pre-authorized routes and uses authenticated task-scoped run outcomes for reliability after five observations. These hooks do not establish authoritative billing totals. The background runtime poller separately uses the documented read-only CLI surfaces for live model availability and provider usage; stale or unknown status fails closed for ACCE overrides.
 
 ## Remaining integration and validation work
 
