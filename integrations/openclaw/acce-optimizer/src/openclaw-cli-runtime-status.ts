@@ -38,7 +38,7 @@ function runCli(file: string, args: string[], timeoutMs: number, signal?: AbortS
         reject(new Error(`OpenClaw CLI ${args.slice(0, 2).join(" ")} failed (code ${code}); details omitted`));
         return;
       }
-      resolve({ stdout: String(stdout), stderr: String(stderr) });
+      resolve({ stdout: String(stdout), stderr: "" });
     });
   });
 }
