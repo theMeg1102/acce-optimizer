@@ -18,6 +18,7 @@ export function extractExplicitRoutePreference(
   const text = prompt.slice(-100_000);
   const directives = [...text.matchAll(DIRECTIVE)];
   const selected = new Map<string, RoutePreference>();
+  let ambiguousDirective = false;
 
   for (const directive of directives) {
     const start = directive.index ?? 0;
@@ -47,9 +48,11 @@ export function extractExplicitRoutePreference(
     if (matches.size === 1) {
       const [key, value] = matches.entries().next().value as [string, RoutePreference];
       selected.set(key, value);
+    } else if (matches.size > 1) {
+      ambiguousDirective = true;
     }
   }
 
   // Conflicting explicit preferences in one prompt are ambiguous; do not guess.
-  return selected.size === 1 ? [...selected.values()][0] : undefined;
+  return !ambiguousDirective && selected.size === 1 ? [...selected.values()][0] : undefined;
 }
