@@ -31,7 +31,7 @@ function runCli(file: string, args: string[], timeoutMs: number, signal?: AbortS
       maxBuffer: 4 * 1024 * 1024,
       windowsHide: true,
       ...(signal ? { signal } : {}),
-    }, (error, stdout, stderr) => {
+    }, (error, stdout, _stderr) => {
       if (error) {
         const code = error && typeof error === "object" && "code" in error ? String(error.code).slice(0, 40) : "unknown";
         // CLI stderr can contain account/provider diagnostics; never surface it in logs.
