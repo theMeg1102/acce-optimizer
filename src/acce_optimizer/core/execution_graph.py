@@ -222,6 +222,7 @@ def search_execution_graph(
     *,
     algorithm: str = "astar",
     max_explored_nodes: int = 10_000,
+    preferred_route_id: str | None = None,
 ) -> AdaptiveSearchResult:
     """Optimize the governed graph with deterministic dynamic edge costs."""
 
@@ -232,7 +233,7 @@ def search_execution_graph(
         route = graph.route_by_node.get(edge.target)
         # Explicit preferences are a soft tie-break influence only after the
         # route has passed all hard governance filters.
-        if request.preferred_route_id and route is not None and route.route_id != request.preferred_route_id:
+        if preferred_route_id and route is not None and route.route_id != preferred_route_id:
             cost += policy.explicit_preference_penalty
         return cost
 

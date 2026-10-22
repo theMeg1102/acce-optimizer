@@ -105,6 +105,7 @@ def adaptive_shadow_compare(
                 routing_policy,
                 algorithm="astar",
                 max_explored_nodes=max(request.search_budget_max_candidate_routes, 1),
+                preferred_route_id=request.preferred_route_id,
             )
             adaptive_route_id = result.selected_route.route_id
             adaptive_cost = result.search.total_cost

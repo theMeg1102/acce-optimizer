@@ -153,6 +153,7 @@ def test_task_specific_route_takes_precedence_over_cheaper_general_route(tmp_pat
         "summary": "coding task",
         "required_capabilities": ["text-generation"],
         "profile": "balanced_local_first",
+        "preferred_route_id": "local-text-generation",
         "constraints": {
             "privacy_level": "unknown", "external_network_allowed": False,
             "max_cloud_cost_usd": 0, "max_latency_ms": 120000,
