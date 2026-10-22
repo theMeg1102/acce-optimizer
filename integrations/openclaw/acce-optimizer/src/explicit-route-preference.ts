@@ -1,9 +1,9 @@
 export type RoutePreference = { providerId: string; modelId: string };
 export type RuntimeRouteIdentity = { providerId: string; modelId: string };
 
-const DIRECTIVE = /\\b(?:use|prefer|choose|select|route(?:\\s+this)?\\s+to|run\\s+with|switch\\s+to|usa|utiliza|prefiero|prefiere|elige|selecciona|cambia\\s+a|quiero\\s+usar)\\b/giu;
-const NEGATED = /(?:\\bdo\\s+not|\\bdon't|\\bnever|\\bno|\\bno\\s+uses|\\bno\\s+utilices|\\bno\\s+prefieras)\\s*$/iu;
-const IDENTIFIER_CHAR = /[\\p{L}\\p{N}_.:-]/u;
+const DIRECTIVE = /\b(?:use|prefer|choose|select|route(?:\s+this)?\s+to|run\s+with|switch\s+to|usa|utiliza|prefiero|prefiere|elige|selecciona|cambia\s+a|quiero\s+usar)\b/giu;
+const NEGATED = /(?:\bdo\s+not|\bdon't|\bnever|\bno|\bno\s+uses|\bno\s+utilices|\bno\s+prefieras)\s*$/iu;
+const IDENTIFIER_CHAR = /[\p{L}\p{N}_.:/-]/u;
 
 /**
  * Extract an explicitly requested route from the current prompt without retaining
