@@ -70,16 +70,19 @@ export default defineFeaturePlugin({
     let runtimeStatusRefreshTimer: ReturnType<typeof setInterval> | undefined;
     let runtimeStatusStartupTimer: ReturnType<typeof setTimeout> | undefined;
     let runtimeStatusRefreshInProgress = false;
+    let runtimeStatusAbortController: AbortController | undefined;
     const refreshRuntimeStatus = async (): Promise<void> => {
       if (runtimeStatusRefreshInProgress) return;
       runtimeStatusRefreshInProgress = true;
       try {
-        const snapshot = await readOpenClawRuntimeStatus({ cliPath: config.openclawCliPath, timeoutMs: 18_000 });
+        runtimeStatusAbortController = new AbortController();
+        const snapshot = await readOpenClawRuntimeStatus({ cliPath: config.openclawCliPath, timeoutMs: 18_000, signal: runtimeStatusAbortController.signal });
         runtimeStatus = snapshot;
         api.logger.info(JSON.stringify({ event: "acce.runtime_status.refreshed", models: snapshot.models.length, providersWithUsage: snapshot.usage.length, usageFresh: Boolean(snapshot.usageCapturedAt) }));
       } catch (error) {
-        api.logger.warn(JSON.stringify({ event: "acce.runtime_status.refresh_failed", error: safeError(error), action: "fail_closed_for_model_override_until_refresh" }));
+        if (!runtimeStatusAbortController?.signal.aborted) api.logger.warn(JSON.stringify({ event: "acce.runtime_status.refresh_failed", error: safeError(error), action: "fail_closed_for_model_override_until_refresh" }));
       } finally {
+        runtimeStatusAbortController = undefined;
         runtimeStatusRefreshInProgress = false;
       }
     };
@@ -353,14 +356,14 @@ export default defineFeaturePlugin({
       }
     };
 
-    // A background service runs only for a missing/empty inventory. Its
-    // promise is deliberately not awaited by service startup, so Ollama
-    // availability and model probes cannot delay the Gateway boot sequence.
+    // Services own background work only in full Gateway runtime mode.
+    if (api.registrationMode === "full") {
     api.registerService({
       id: "acce-optimizer-runtime-status",
       start() {
         if (!isEnabled(config)) return;
-        const intervalSeconds = Math.max(60, Math.min(900, Math.floor(config.runtimeStatusRefreshSeconds ?? 300)));
+        const requestedInterval = Number.isFinite(config.runtimeStatusRefreshSeconds) ? Math.floor(config.runtimeStatusRefreshSeconds as number) : 300;
+        const intervalSeconds = Math.max(60, Math.min(900, requestedInterval));
         // Keep Gateway-backed CLI calls out of plugin startup and model resolution.
         runtimeStatusStartupTimer = setTimeout(() => { void refreshRuntimeStatus(); }, 15_000);
         runtimeStatusRefreshTimer = setInterval(() => { void refreshRuntimeStatus(); }, intervalSeconds * 1000);
@@ -368,6 +371,7 @@ export default defineFeaturePlugin({
       stop() {
         if (runtimeStatusStartupTimer) clearTimeout(runtimeStatusStartupTimer);
         if (runtimeStatusRefreshTimer) clearInterval(runtimeStatusRefreshTimer);
+        runtimeStatusAbortController?.abort();
         runtimeStatusStartupTimer = undefined;
         runtimeStatusRefreshTimer = undefined;
       },
@@ -411,6 +415,7 @@ export default defineFeaturePlugin({
         });
       },
     });
+    }
 
     api.registerCli((ctx) => {
       const root = ctx.program

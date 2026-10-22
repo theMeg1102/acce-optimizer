@@ -21,15 +21,16 @@ export type OpenClawRuntimeStatus = {
 };
 
 type CliResult = { stdout: string; stderr: string };
-type CliRunner = (file: string, args: string[], timeoutMs: number) => Promise<CliResult>;
+type CliRunner = (file: string, args: string[], timeoutMs: number, signal?: AbortSignal) => Promise<CliResult>;
 
-function runCli(file: string, args: string[], timeoutMs: number): Promise<CliResult> {
+function runCli(file: string, args: string[], timeoutMs: number, signal?: AbortSignal): Promise<CliResult> {
   return new Promise((resolve, reject) => {
     nodeExecFile(file, args, {
       encoding: "utf8",
       timeout: timeoutMs,
       maxBuffer: 4 * 1024 * 1024,
       windowsHide: true,
+      ...(signal ? { signal } : {}),
     }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(`OpenClaw CLI ${args.slice(0, 2).join(" ")} failed: ${String(stderr || error.message).slice(0, 500)}`));
@@ -106,17 +107,18 @@ export async function readOpenClawRuntimeStatus(options: {
   timeoutMs?: number;
   now?: () => number;
   runCli?: CliRunner;
+  signal?: AbortSignal;
 } = {}): Promise<OpenClawRuntimeStatus> {
   const cliPath = options.cliPath?.trim() || "openclaw";
   const timeoutMs = options.timeoutMs ?? 15_000;
   const runner = options.runCli ?? runCli;
   // These are documented, read-only CLI surfaces. Do not use private Gateway RPC.
-  const modelsResult = await runner(cliPath, ["models", "list", "--all", "--json"], timeoutMs);
+  const modelsResult = await runner(cliPath, ["models", "list", "--all", "--json"], timeoutMs, options.signal);
   const models = parseModelRows(JSON.parse(modelsResult.stdout));
   let usageCapturedAt = "";
   let usage: RuntimeProviderUsage[] = [];
   try {
-    const usageResult = await runner(cliPath, ["status", "--usage", "--json", "--timeout", String(Math.max(1000, timeoutMs - 3000))], timeoutMs);
+    const usageResult = await runner(cliPath, ["status", "--usage", "--json", "--timeout", String(Math.max(1000, timeoutMs - 3000))], timeoutMs, options.signal);
     const parsedUsage = parseUsage(JSON.parse(usageResult.stdout));
     usageCapturedAt = parsedUsage.capturedAt;
     usage = parsedUsage.usage;
