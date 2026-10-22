@@ -166,3 +166,69 @@ def test_task_specific_route_takes_precedence_over_cheaper_general_route(tmp_pat
     assert result["selected_route"]["route_id"] == "coding-specific"
     assert result["modelOverride"] == "example-coding-model"
     assert result["ranking_result"][0]["route_id"] == "coding-specific"
+
+
+
+def test_runtime_catalog_filters_candidates_before_graph_ranking(tmp_path: Path) -> None:
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    observations_path = tmp_path / "observations.json"
+    request = {
+        "request_id": "runtime-catalog-filter",
+        "task_class": "general",
+        "summary": "OpenClaw text-generation model selection",
+        "required_capabilities": ["text-generation"],
+        "profile": "balanced_local_first",
+        "constraints": {
+            "privacy_level": "unknown",
+            "external_network_allowed": False,
+            "max_cloud_cost_usd": 0,
+            "max_latency_ms": 120000,
+            "min_quality_score": 0,
+            "search_budget": {"max_candidate_routes": 100},
+            "quota_budget": {"remaining_fraction": 1},
+        },
+        "governance": {"validation_required": True},
+    }
+
+    result = _decision({
+        "request": request,
+        # A configured model that is not the operator-authorized route must
+        # not authorize or select that route; no matching pair means no override.
+        "runtime_catalog": [{"providerId": "other-provider", "modelId": "other-model"}],
+    }, registry_path, observations_path, require_production=False)
+
+    assert result["providerOverride"] is None
+    assert result["modelOverride"] is None
+    assert result["selected_route"] is None
+    assert result["status"] != "execution_plan_ready" or result["decision_state"] != "adaptive_route_selected"
+
+
+def test_runtime_catalog_allows_only_exact_authorized_pair(tmp_path: Path) -> None:
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    observations_path = tmp_path / "observations.json"
+    request = {
+        "request_id": "runtime-catalog-exact-match",
+        "task_class": "general",
+        "summary": "OpenClaw text-generation model selection",
+        "required_capabilities": ["text-generation"],
+        "profile": "balanced_local_first",
+        "constraints": {
+            "privacy_level": "unknown",
+            "external_network_allowed": False,
+            "max_cloud_cost_usd": 0,
+            "max_latency_ms": 120000,
+            "min_quality_score": 0,
+            "search_budget": {"max_candidate_routes": 100},
+            "quota_budget": {"remaining_fraction": 1},
+        },
+        "governance": {"validation_required": True},
+    }
+
+    result = _decision({
+        "request": request,
+        "runtime_catalog": [{"providerId": "local-provider", "modelId": "example-local-model"}],
+    }, registry_path, observations_path, require_production=False)
+
+    assert result["providerOverride"] == "local-provider"
+    assert result["modelOverride"] == "example-local-model"
+    assert result["selected_route"]["route_id"] == "local-text-generation"

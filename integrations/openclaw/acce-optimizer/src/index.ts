@@ -102,6 +102,9 @@ export default defineFeaturePlugin({
       try {
         const decision = await decisionClient.decide({
           request_id: `openclaw-${randomUUID()}`,
+          // Send identifiers only: ACCE intersects this live configured catalog
+          // with its operator-authorized registry before graph construction.
+          runtime_catalog: runtimeModels.map((model) => ({ providerId: model.providerId, modelId: model.modelId })),
           task_class: taskProfile.taskClass,
           summary: `${taskProfile.summary}; historical_pattern=${patternConsensus.eligible ? "eligible" : "not-established"}; matching_fraction=${patternConsensus.matchingFraction.toFixed(4)}`,
           required_capabilities: ["text-generation"],

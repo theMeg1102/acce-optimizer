@@ -113,6 +113,35 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
     if not isinstance(request, dict):
         raise ValueError("request field must be a JSON object")
     registry = _load_registry(registry_path, observations_path, require_production=require_production)
+    # OpenClaw's effective configured catalog is an input to ACCE's candidate
+    # construction, not a ranking authority. Validate the operator registry
+    # first, then derive a per-request view containing only exact provider/model
+    # pairs configured in the current Gateway snapshot. Missing/empty catalog
+    # must not let a stale registry route win and then fail late in the hook.
+    if "runtime_catalog" in payload:
+        catalog = payload.get("runtime_catalog")
+        allowed_pairs: set[tuple[str, str]] = set()
+        if isinstance(catalog, list):
+            for item in catalog:
+                if not isinstance(item, dict):
+                    continue
+                provider_id = item.get("providerId")
+                model_id = item.get("modelId")
+                if isinstance(provider_id, str) and provider_id.strip() and isinstance(model_id, str) and model_id.strip():
+                    allowed_pairs.add((provider_id.strip(), model_id.strip()))
+        snapshot = registry.snapshot
+        snapshot["instances"] = [
+            route for route in snapshot.get("instances", [])
+            if isinstance(route, dict)
+            and (route.get("provider_id"), route.get("model_used")) in allowed_pairs
+        ]
+        catalog_fingerprint = hashlib.sha256(
+            json.dumps(sorted(allowed_pairs), separators=(",", ":")).encode("utf-8")
+        ).hexdigest()[:12]
+        snapshot["snapshot_id"] = f"{snapshot.get('snapshot_id', 'registry')}-runtime-{catalog_fingerprint}"
+        # The source registry has already passed its strict production contract;
+        # this derived view can only remove routes, never authorize new ones.
+        registry = CapabilityRegistry(snapshot)
     trusted_state = _load_trusted_state()
     request_data = dict(request)
     constraints = request_data.get("constraints")
