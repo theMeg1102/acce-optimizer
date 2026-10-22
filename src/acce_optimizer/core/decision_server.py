@@ -195,6 +195,20 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
     registry = _load_registry(registry_path, observations_path, require_production=require_production)
     if "runtime_catalog" in payload:
         registry = _apply_runtime_catalog(registry, request, payload.get("runtime_catalog"))
+    # A preference is a soft ranking signal only. Resolve it to an exact route
+    # already present in the operator-authorized, runtime-filtered registry.
+    preference = payload.get("preference")
+    if isinstance(preference, dict):
+        preferred_provider = preference.get("providerId")
+        preferred_model = preference.get("modelId")
+        if isinstance(preferred_provider, str) and isinstance(preferred_model, str):
+            preferred = next((route for route in registry.snapshot.get("instances", [])
+                              if isinstance(route, dict)
+                              and route.get("provider_id") == preferred_provider
+                              and route.get("model_used") == preferred_model), None)
+            if preferred is not None:
+                request = dict(request)
+                request["preferred_route_id"] = preferred.get("route_id")
     trusted_state = _load_trusted_state()
     request_data = dict(request)
     constraints = request_data.get("constraints")

@@ -228,7 +228,13 @@ def search_execution_graph(
     def edge_cost(edge: GraphEdge) -> float:
         target = next(node for node in graph.snapshot.nodes if node.node_id == edge.target)
         estimate = graph.estimate_by_node.get(edge.target)
-        return effective_edge_cost(edge, target, resources, estimate, policy)
+        cost = effective_edge_cost(edge, target, resources, estimate, policy)
+        route = graph.route_by_node.get(edge.target)
+        # Explicit preferences are a soft tie-break influence only after the
+        # route has passed all hard governance filters.
+        if request.preferred_route_id and route is not None and route.route_id != request.preferred_route_id:
+            cost += policy.explicit_preference_penalty
+        return cost
 
     if algorithm == "dijkstra":
         result = dijkstra(

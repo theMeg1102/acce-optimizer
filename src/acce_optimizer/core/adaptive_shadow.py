@@ -67,6 +67,8 @@ def adaptive_shadow_compare(
         node = node_by_id[edge.target]
         estimate = graph.estimate_by_node.get(edge.target)
         effective_cost = effective_edge_cost(edge, node, resources, estimate, routing_policy)
+        if request.preferred_route_id and route.route_id != request.preferred_route_id:
+            effective_cost += routing_policy.explicit_preference_penalty
         ranked.append({
             "route_id": route.route_id,
             "provider_id": route.provider_id,

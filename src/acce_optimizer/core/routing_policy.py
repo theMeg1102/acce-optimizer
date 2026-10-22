@@ -29,6 +29,7 @@ class RoutingPolicy:
     complexity_weight: float = 1.0
 
     local_preference_factor: float = 0.80
+    explicit_preference_penalty: float = 0.05
     quota_scarcity_weight: float = 2.0
     budget_scarcity_weight: float = 2.0
 
@@ -82,6 +83,7 @@ class RoutingPolicy:
             "complexity_weight",
             "quota_scarcity_weight",
             "budget_scarcity_weight",
+            "explicit_preference_penalty",
         ):
             if getattr(self, field) < 0:
                 raise ContractValidationError(f"{field} must be non-negative")

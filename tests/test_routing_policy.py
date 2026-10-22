@@ -122,3 +122,8 @@ def test_effective_preference_change_resets_learning_cycle_to_start():
     assert reset.success_rate == 0.0
     assert reset.agreement_rate == 0.0
     assert reset.reset_generation == 1
+
+
+def test_explicit_preference_penalty_is_nonnegative_and_configurable():
+    assert RoutingPolicy().explicit_preference_penalty == 0.05
+    assert RoutingPolicy(explicit_preference_penalty=0.2).explicit_preference_penalty == 0.2

@@ -298,3 +298,28 @@ def test_runtime_price_with_unmodeled_cache_rates_preserves_registry_estimate(tm
     route = result.snapshot["instances"][0]
     assert route["estimated_cloud_cost_usd"] == original_cost
     assert route["monetary_metered"] is False
+
+
+def test_explicit_preferred_route_is_preserved_in_normalized_decision_request() -> None:
+    request = DecisionRequest.from_mapping({
+        "request_id": "preferred-route",
+        "task_class": "coding",
+        "summary": "coding task",
+        "preferred_route_id": "route-local",
+        "constraints": {},
+        "governance": {},
+    })
+    assert request.preferred_route_id == "route-local"
+    assert request.normalized()["preferred_route_id"] == "route-local"
+
+
+def test_preferred_route_id_is_optional_for_backward_compatibility() -> None:
+    request = DecisionRequest.from_mapping({
+        "request_id": "no-preference",
+        "task_class": "general",
+        "summary": "general task",
+        "constraints": {},
+        "governance": {},
+    })
+    assert request.preferred_route_id is None
+    assert "preferred_route_id" not in request.normalized()

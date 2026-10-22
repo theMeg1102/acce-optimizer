@@ -27,6 +27,7 @@ type AccePluginConfig = {
   inventoryPath?: string;
   similarityHistoryPath?: string;
   similarityThreshold?: number;
+  preferredRoutes?: Partial<Record<"coding" | "research" | "analysis" | "general", { providerId: string; modelId: string }>>;
 };
 
 function isEnabled(config: AccePluginConfig): boolean {
@@ -117,6 +118,7 @@ export default defineFeaturePlugin({
           // Send identifiers only: ACCE intersects this live configured catalog
           // with its operator-authorized registry before graph construction.
           runtime_catalog: runtimeModels.map((model) => ({ providerId: model.providerId, modelId: model.modelId, ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}), ...(model.contextTokens ? { contextTokens: model.contextTokens } : {}), ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}), ...(model.cost ? { cost: model.cost } : {}) })),
+          ...(config.preferredRoutes?.[taskProfile.taskClass] ? { preference: config.preferredRoutes[taskProfile.taskClass] } : {}),
           task_class: taskProfile.taskClass,
           summary: `${taskProfile.summary}; historical_pattern=${patternConsensus.eligible ? "eligible" : "not-established"}; matching_fraction=${patternConsensus.matchingFraction.toFixed(4)}`,
           required_capabilities: ["text-generation"],
