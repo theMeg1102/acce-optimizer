@@ -3,6 +3,7 @@ import { extractExplicitRoutePreference } from "./explicit-route-preference.js";
 
 const routes = [
   { providerId: "local-provider", modelId: "Reader" },
+  { providerId: "cloud-provider", modelId: "model" },
   { providerId: "cloud-provider", modelId: "model/large" },
   { providerId: "cloud-provider", modelId: "model/fast" },
 ];
@@ -24,6 +25,11 @@ describe("explicit current-turn route preference", () => {
   it("fails closed on ambiguous or conflicting route mentions", () => {
     expect(extractExplicitRoutePreference("Use local-provider/Reader or cloud-provider/model/fast.", routes)).toBeUndefined();
     expect(extractExplicitRoutePreference("Use local-provider/Reader, then prefer cloud-provider/model/fast.", routes)).toBeUndefined();
+  });
+
+  it("does not mistake a shorter model ID for a prefix of a longer model ID", () => {
+    expect(extractExplicitRoutePreference("Use cloud-provider/model/large.", routes))
+      .toEqual({ providerId: "cloud-provider", modelId: "model/large" });
   });
 
   it("matches exact configured identity, preserving model-ID case", () => {
