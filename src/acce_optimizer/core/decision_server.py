@@ -245,7 +245,7 @@ def _apply_runtime_catalog(registry: CapabilityRegistry, request: dict[str, Any]
     return CapabilityRegistry(snapshot)
 
 
-def _decision(payload: Any, registry_path: Path, observations_path: Path, *, require_production: bool = True, route_outcomes_path: Path | None = None) -> dict[str, Any]:
+def _decision(payload: Any, registry_path: Path, observations_path: Path, *, require_production: bool = True, route_outcomes_path: Path | None = None, issued_decisions_path: Path | None = None) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("request body must be a JSON object")
     request = payload.get("request")
@@ -319,7 +319,7 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
             "modelOverride": None,
             "policy_mode": result.get("policy_mode"),
         }
-    return {
+    response = {
         "decision_id": result.get("decision_id"),
         "decision_state": result.get("decision_state"),
         "status": result.get("status"),
@@ -336,9 +336,49 @@ def _decision(payload: Any, registry_path: Path, observations_path: Path, *, req
         "policy_snapshot_id": result.get("policy_snapshot_id"),
         "policy_mode": result.get("policy_mode"),
     }
+    if issued_decisions_path is not None:
+        _store_issued_decision({
+            "decision_id": response.get("decision_id"),
+            "selected_route": response.get("selected_route"),
+            "task_signature": task_signature,
+        }, issued_decisions_path)
+    return response
 
 
-def _store_route_outcome(payload: Any, registry_path: Path, outcomes_path: Path, *, require_production: bool = True) -> dict[str, int]:
+def _store_issued_decision(payload: dict[str, Any], issued_path: Path) -> None:
+    """Persist the selected route receipt needed to authenticate one later outcome."""
+    decision_id = payload.get("decision_id")
+    route = payload.get("selected_route")
+    task_signature = payload.get("task_signature")
+    if not isinstance(decision_id, str) or not decision_id.strip() or not isinstance(route, dict):
+        return
+    route_id, provider_id, model_id = route.get("route_id"), route.get("provider_id"), route.get("model_used")
+    if not all(isinstance(value, str) and value.strip() for value in (route_id, provider_id, model_id, task_signature)):
+        return
+    records: list[dict[str, Any]] = []
+    if issued_path.is_file():
+        try:
+            raw = json.loads(issued_path.read_text(encoding="utf-8"))
+            if isinstance(raw, list):
+                records = [item for item in raw if isinstance(item, dict)]
+        except Exception:
+            records = []
+    records = [item for item in records if item.get("decision_id") != decision_id]
+    records.append({
+        "decision_id": decision_id, "route_id": route_id, "provider_id": provider_id,
+        "model_id": model_id, "task_signature": task_signature,
+        "issued_at": datetime.now(timezone.utc).isoformat(),
+    })
+    records = records[-2000:]
+    issued_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(issued_path.parent, 0o700)
+    temporary = issued_path.with_suffix(issued_path.suffix + ".tmp")
+    temporary.write_text(json.dumps(records, separators=(",", ":"), allow_nan=False) + chr(10), encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    temporary.replace(issued_path)
+
+
+def _store_route_outcome(payload: Any, registry_path: Path, outcomes_path: Path, *, require_production: bool = True, issued_decisions_path: Path | None = None) -> dict[str, int]:
     """Persist bounded, minimized route-level run outcomes for the existing graph."""
     if not isinstance(payload, dict):
         raise ValueError("outcome must be an object")
@@ -358,6 +398,8 @@ def _store_route_outcome(payload: Any, registry_path: Path, outcomes_path: Path,
         raise ValueError("outcome must be success or failure")
     if decision_id is not None and (not isinstance(decision_id, str) or len(decision_id) > 128):
         raise ValueError("decision_id is invalid")
+    if issued_decisions_path is not None and (not isinstance(decision_id, str) or not decision_id.strip()):
+        raise ValueError("decision_id is required for attributable route outcomes")
 
     registry_snapshot = read_json(registry_path)
     registry = CapabilityRegistry.from_production_snapshot(registry_snapshot) if require_production else CapabilityRegistry(registry_snapshot)
@@ -370,6 +412,24 @@ def _store_route_outcome(payload: Any, registry_path: Path, outcomes_path: Path,
     )
     if not authorized:
         raise ValueError("outcome route is not present in the operator-authorized registry")
+
+    issued_records: list[dict[str, Any]] = []
+    matched_issued: dict[str, Any] | None = None
+    if issued_decisions_path is not None:
+        try:
+            raw_issued = json.loads(issued_decisions_path.read_text(encoding="utf-8")) if issued_decisions_path.is_file() else []
+        except Exception:
+            raw_issued = []
+        if isinstance(raw_issued, list):
+            issued_records = [item for item in raw_issued if isinstance(item, dict)]
+        matched_issued = next((item for item in issued_records if item.get("decision_id") == decision_id), None)
+        if not matched_issued or any((
+            matched_issued.get("route_id") != route_id,
+            matched_issued.get("provider_id") != provider_id,
+            matched_issued.get("model_id") != model_id,
+            matched_issued.get("task_signature") != task_signature,
+        )):
+            raise ValueError("outcome does not match a recently issued ACCE decision")
 
     outcomes: list[dict[str, Any]] = []
     if outcomes_path.is_file():
@@ -395,6 +455,12 @@ def _store_route_outcome(payload: Any, registry_path: Path, outcomes_path: Path,
     temporary.write_text(json.dumps(outcomes, separators=(",", ":"), allow_nan=False) + chr(10), encoding="utf-8")
     os.chmod(temporary, 0o600)
     temporary.replace(outcomes_path)
+    if issued_decisions_path is not None and matched_issued is not None:
+        issued_records = [item for item in issued_records if item.get("decision_id") != decision_id]
+        temporary_issued = issued_decisions_path.with_suffix(issued_decisions_path.suffix + ".tmp")
+        temporary_issued.write_text(json.dumps(issued_records[-2000:], separators=(",", ":"), allow_nan=False) + chr(10), encoding="utf-8")
+        os.chmod(temporary_issued, 0o600)
+        temporary_issued.replace(issued_decisions_path)
     return {"accepted": 1, "retained": len(outcomes)}
 
 
@@ -438,14 +504,16 @@ def make_handler(registry_path: Path, observations_path: Path, bearer_token: str
                 payload = json.loads(raw.decode("utf-8"))
                 if route_path == "/v1/observations":
                     self._send(200, _store_observations(payload, observations_path))
-                elif route_path == "/v1/outcomes":
+                issued_raw = os.environ.get("ACCE_ISSUED_DECISIONS_PATH", "").strip()
+                issued_path = Path(issued_raw).expanduser().resolve() if issued_raw else registry_path.with_name("acce-issued-decisions.json")
+                if route_path == "/v1/outcomes":
                     outcomes_raw = os.environ.get("ACCE_ROUTE_OUTCOMES_PATH", "").strip()
                     outcomes_path = Path(outcomes_raw).expanduser().resolve() if outcomes_raw else registry_path.with_name("acce-route-outcomes.json")
-                    self._send(200, _store_route_outcome(payload, registry_path, outcomes_path))
+                    self._send(200, _store_route_outcome(payload, registry_path, outcomes_path, issued_decisions_path=issued_path))
                 else:
                     outcomes_raw = os.environ.get("ACCE_ROUTE_OUTCOMES_PATH", "").strip()
                     outcomes_path = Path(outcomes_raw).expanduser().resolve() if outcomes_raw else registry_path.with_name("acce-route-outcomes.json")
-                    self._send(200, _decision(payload, registry_path, observations_path, route_outcomes_path=outcomes_path))
+                    self._send(200, _decision(payload, registry_path, observations_path, route_outcomes_path=outcomes_path, issued_decisions_path=issued_path))
             except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
                 self._send(400, {"error": "invalid_request", "detail": str(error)})
             except Exception as error:

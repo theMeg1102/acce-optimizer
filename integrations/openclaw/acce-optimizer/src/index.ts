@@ -226,7 +226,7 @@ export default defineFeaturePlugin({
       void taskHistory.recordOutcome(observation.observationId, outcome).then((updated) => {
         api.logger.info(JSON.stringify({ event: "acce.learning.outcome_recorded", attributed: updated, outcome }));
       }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.learning.outcome_unavailable", error: safeError(error) })));
-      if (decisionClient.configured && observation.routeId && observation.providerId && observation.modelId) {
+      if (decisionClient.configured && observation.decisionId && observation.routeId && observation.providerId && observation.modelId) {
         void decisionClient.recordOutcome({
           route_id: observation.routeId,
           provider_id: observation.providerId,

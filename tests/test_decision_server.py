@@ -8,7 +8,7 @@ import pytest
 from acce_optimizer.core.errors import ContractValidationError
 from acce_optimizer.core.engine import route_blocking_reason
 from acce_optimizer.core.models import CandidateRoute, DecisionRequest
-from acce_optimizer.core.decision_server import _apply_runtime_catalog, _decision, _load_registry, _load_trusted_state, _store_observations, _store_route_outcome
+from acce_optimizer.core.decision_server import _apply_runtime_catalog, _decision, _load_registry, _load_trusted_state, _store_observations, _store_route_outcome, _store_issued_decision
 
 
 def test_discovery_telemetry_updates_only_matching_configured_route(tmp_path: Path) -> None:
@@ -416,3 +416,30 @@ def test_observation_sync_merges_models_and_applies_conservative_context_budget(
     registry = _load_registry(registry_path, observations_path, require_production=False)
     route = registry.candidates_for("text-generation")[0]
     assert route.context_window_tokens == 8192
+
+
+def test_route_outcome_requires_matching_issued_decision_and_is_one_time(tmp_path: Path) -> None:
+    registry_path = Path(__file__).parents[1] / "examples" / "registry.json"
+    outcomes_path = tmp_path / "route-outcomes.json"
+    issued_path = tmp_path / "issued-decisions.json"
+    decision = {
+        "decision_id": "decision-123",
+        "task_signature": "coding|programming",
+        "selected_route": {
+            "route_id": "local-text-generation",
+            "provider_id": "local-provider",
+            "model_used": "example-local-model",
+        },
+    }
+    _store_issued_decision(decision, issued_path)
+    outcome = {
+        "decision_id": "decision-123",
+        "route_id": "local-text-generation",
+        "provider_id": "local-provider",
+        "model_id": "example-local-model",
+        "task_signature": "coding|programming",
+        "outcome": "success",
+    }
+    assert _store_route_outcome(outcome, registry_path, outcomes_path, require_production=False, issued_decisions_path=issued_path)["accepted"] == 1
+    with pytest.raises(ValueError, match="recently issued"):
+        _store_route_outcome(outcome, registry_path, outcomes_path, require_production=False, issued_decisions_path=issued_path)
