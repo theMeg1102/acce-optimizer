@@ -1,5 +1,6 @@
 export type TaskObservation = {
   signature: string;
+  observationId?: string;
   categories: string[];
   observedAt: string;
   outcome?: "success" | "failure" | "unknown";
@@ -62,9 +63,9 @@ export function evaluateSimilarityWindow(currentCategories: readonly string[], h
   return lastResult ?? { eligible: false, sampleSize: 0, matchingCount: 0, matchingFraction: 0, requiredMatches: Math.ceil(minimumWindow * threshold), signature, windowSizesEvaluated, reason: "insufficient_history" };
 }
 
-export function appendTaskObservation(history: readonly TaskObservation[], categories: readonly string[], options: { outcome?: TaskObservation["outcome"]; preference?: string; observedAt?: string } = {}, maximumEntries = 501): TaskObservation[] {
+export function appendTaskObservation(history: readonly TaskObservation[], categories: readonly string[], options: { observationId?: string; outcome?: TaskObservation["outcome"]; preference?: string; observedAt?: string } = {}, maximumEntries = 501): TaskObservation[] {
   if (!Number.isInteger(maximumEntries) || maximumEntries < 5) throw new RangeError("maximum history entries must be an integer >= 5");
   const categoriesNormalized = canonicalCategories(categories);
-  const observation: TaskObservation = { signature: taskSignature(categoriesNormalized), categories: categoriesNormalized, observedAt: options.observedAt ?? new Date().toISOString(), outcome: options.outcome ?? "unknown", ...(options.preference ? { preference: options.preference } : {}) };
+  const observation: TaskObservation = { signature: taskSignature(categoriesNormalized), ...(options.observationId ? { observationId: options.observationId } : {}), categories: categoriesNormalized, observedAt: options.observedAt ?? new Date().toISOString(), outcome: options.outcome ?? "unknown", ...(options.preference ? { preference: options.preference } : {}) };
   return [...history, observation].slice(-maximumEntries);
 }

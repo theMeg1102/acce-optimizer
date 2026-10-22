@@ -59,6 +59,8 @@ export default defineFeaturePlugin({
   setup(api) {
     const config = (api.pluginConfig ?? {}) as AccePluginConfig;
     const taskHistory = createTaskHistoryStore(resolveStorePath(config.similarityHistoryPath ?? "~/.openclaw/acce-optimizer-data/task-history.json"));
+    // Correlation ids are transient in-memory only; persistent history stores a random observation id, never a run/session id.
+    const runObservations = new Map<string, string>();
     const runtimeModels = readConfiguredRuntimeModels(api.config);
     api.logger.info(JSON.stringify({ event: "acce.runtime.catalog_observed", source: "openclaw-effective-config", modelCount: runtimeModels.length, pricedModelCount: runtimeModels.filter((model) => model.cost !== undefined).length }));
 
@@ -67,7 +69,7 @@ export default defineFeaturePlugin({
       bearerToken: config.decisionServiceToken ?? process.env.ACCE_DECISION_TOKEN,
     });
 
-    api.on("before_model_resolve", async (event) => {
+    api.on("before_model_resolve", async (event, ctx) => {
       if (!isEnabled(config)) return;
       const mode = config.mode ?? "adaptive";
       // Build and persist only category signatures, even in shadow mode, so
@@ -75,7 +77,16 @@ export default defineFeaturePlugin({
       const taskProfile = deriveTaskProfile(event.prompt);
       let patternConsensus = evaluateSimilarityWindow(taskProfile.categories, [], { threshold: config.similarityThreshold ?? 0.8 });
       try {
-        patternConsensus = await taskHistory.recordAndEvaluate(taskProfile.categories, config.similarityThreshold ?? 0.8);
+        const recorded = await taskHistory.recordAndEvaluateWithId(taskProfile.categories, config.similarityThreshold ?? 0.8);
+        patternConsensus = recorded.consensus;
+        if (typeof ctx.runId === "string" && ctx.runId.length > 0) {
+          runObservations.set(ctx.runId, recorded.observationId);
+          while (runObservations.size > 1000) {
+            const oldest = runObservations.keys().next().value;
+            if (typeof oldest !== "string") break;
+            runObservations.delete(oldest);
+          }
+        }
       } catch (error) {
         api.logger.warn(JSON.stringify({ event: "acce.similarity.history_unavailable", error: safeError(error), action: "use_per_task_decision" }));
       }
@@ -165,6 +176,21 @@ export default defineFeaturePlugin({
         }));
         return;
       }
+    });
+
+    // Attribute only the host's explicit run success/failure to the matching
+    // transient run observation. Do not infer preference from model-call telemetry.
+    api.on("agent_end", (event, ctx) => {
+      const runId = typeof event.runId === "string" ? event.runId : typeof ctx.runId === "string" ? ctx.runId : undefined;
+      if (!runId) return;
+      const observationId = runObservations.get(runId);
+      if (!observationId) return;
+      runObservations.delete(runId);
+      const outcome = typeof event.success === "boolean" ? (event.success ? "success" : "failure") : undefined;
+      if (!outcome) return;
+      void taskHistory.recordOutcome(observationId, outcome).then((updated) => {
+        api.logger.info(JSON.stringify({ event: "acce.learning.outcome_recorded", attributed: updated, outcome }));
+      }).catch((error: unknown) => api.logger.warn(JSON.stringify({ event: "acce.learning.outcome_unavailable", error: safeError(error) })));
     });
 
     // Native OpenClaw 2026.10.5 typed telemetry hooks; aggregate fields only.

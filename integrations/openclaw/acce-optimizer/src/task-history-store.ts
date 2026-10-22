@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { appendTaskObservation, evaluateSimilarityWindow, type SimilarityWindowResult, type TaskObservation } from "./task-similarity.js";
@@ -24,13 +25,32 @@ export function createTaskHistoryStore(path: string) {
     await chmod(temporary, 0o600);
     await rename(temporary, path);
   }
+  async function record(categories: readonly string[], threshold: number): Promise<{ consensus: SimilarityWindowResult; observationId: string }> {
+    const history = await loadUnlocked();
+    const consensus = evaluateSimilarityWindow(categories, history, { threshold });
+    const observationId = randomUUID();
+    await saveUnlocked(appendTaskObservation(history, categories, { observationId }));
+    return { consensus, observationId };
+  }
   return {
     async recordAndEvaluate(categories: readonly string[], threshold = 0.8): Promise<SimilarityWindowResult> {
+      const operation = queue.then(() => record(categories, threshold)).then((result) => result.consensus);
+      queue = operation.then(() => undefined, () => undefined);
+      return operation;
+    },
+    async recordAndEvaluateWithId(categories: readonly string[], threshold = 0.8): Promise<{ consensus: SimilarityWindowResult; observationId: string }> {
+      const operation = queue.then(() => record(categories, threshold));
+      queue = operation.then(() => undefined, () => undefined);
+      return operation;
+    },
+    async recordOutcome(observationId: string, outcome: "success" | "failure"): Promise<boolean> {
       const operation = queue.then(async () => {
         const history = await loadUnlocked();
-        const result = evaluateSimilarityWindow(categories, history, { threshold });
-        await saveUnlocked(appendTaskObservation(history, categories));
-        return result;
+        const index = history.findIndex((item) => item.observationId === observationId);
+        if (index < 0) return false;
+        const updated = history.map((item, itemIndex) => itemIndex === index ? { ...item, outcome } : item);
+        await saveUnlocked(updated);
+        return true;
       });
       queue = operation.then(() => undefined, () => undefined);
       return operation;
