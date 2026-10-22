@@ -15,6 +15,7 @@ import { evaluateSimilarityWindow } from "./task-similarity.js";
 import { readConfiguredRuntimeModels, sanitizeModelTelemetry } from "./openclaw-runtime-state.js";
 import { isModelOverrideAllowed } from "./openclaw-override-policy.js";
 import { readOpenClawRuntimeStatus, type OpenClawRuntimeStatus } from "./openclaw-cli-runtime-status.js";
+import { extractExplicitRoutePreference } from "./explicit-route-preference.js";
 
 type AccePluginConfig = {
   enabled?: boolean;
@@ -100,6 +101,8 @@ export default defineFeaturePlugin({
       // Build and persist only category signatures, even in shadow mode, so
       // operators can accumulate history without allowing model overrides.
       const taskProfile = deriveTaskProfile(event.prompt);
+      // Extract only an explicit route directive locally; never send or persist prompt text.
+      const explicitPreference = extractExplicitRoutePreference(event.prompt, runtimeModels);
       let patternConsensus = evaluateSimilarityWindow(taskProfile.categories, [], { threshold: config.similarityThreshold ?? 0.8 });
       let learnedRouteOrder: string[] | undefined;
       try {
@@ -147,7 +150,7 @@ export default defineFeaturePlugin({
           runtime_status_required: true,
           runtime_status: runtimeStatus ?? null,
           ...(learnedRouteOrder ? { preferred_route_order: learnedRouteOrder } : {}),
-          ...(config.preferredRoutes?.[taskProfile.taskClass] ? { preference: config.preferredRoutes[taskProfile.taskClass] } : {}),
+          ...((explicitPreference ?? config.preferredRoutes?.[taskProfile.taskClass]) ? { preference: explicitPreference ?? config.preferredRoutes?.[taskProfile.taskClass] } : {}),
           task_class: taskProfile.taskClass,
           summary: `${taskProfile.summary}; historical_pattern=${patternConsensus.eligible ? "eligible" : "not-established"}; matching_fraction=${patternConsensus.matchingFraction.toFixed(4)}`,
           required_capabilities: ["text-generation"],
