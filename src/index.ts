@@ -15,6 +15,7 @@ import { evaluateSimilarityWindow } from "./task-similarity.js";
 import { readConfiguredRuntimeModels, sanitizeModelTelemetry } from "./openclaw-runtime-state.js";
 import { isModelOverrideAllowed } from "./openclaw-override-policy.js";
 import { readOpenClawRuntimeStatus, type OpenClawRuntimeStatus } from "./openclaw-cli-runtime-status.js";
+import { isKnownLocalProvider, isRuntimeStatusFresh, runtimeOverrideBlockReason } from "./runtime-status-policy.js";
 
 type AccePluginConfig = {
   enabled?: boolean;
@@ -71,6 +72,9 @@ export default defineFeaturePlugin({
     let runtimeStatusStartupTimer: ReturnType<typeof setTimeout> | undefined;
     let runtimeStatusRefreshInProgress = false;
     let runtimeStatusAbortController: AbortController | undefined;
+    const requestedRuntimeRefreshSeconds = Number.isFinite(config.runtimeStatusRefreshSeconds) ? Math.floor(config.runtimeStatusRefreshSeconds as number) : 300;
+    const runtimeStatusRefreshIntervalSeconds = Math.max(60, Math.min(900, requestedRuntimeRefreshSeconds));
+    const runtimeStatusMaxAgeMs = runtimeStatusRefreshIntervalSeconds * 1000;
     const refreshRuntimeStatus = async (): Promise<void> => {
       if (runtimeStatusRefreshInProgress) return;
       runtimeStatusRefreshInProgress = true;
@@ -80,6 +84,8 @@ export default defineFeaturePlugin({
         runtimeStatus = snapshot;
         api.logger.info(JSON.stringify({ event: "acce.runtime_status.refreshed", models: snapshot.models.length, providersWithUsage: snapshot.usage.length, usageFresh: Boolean(snapshot.usageCapturedAt) }));
       } catch (error) {
+        // A failed refresh invalidates the prior snapshot; it must never authorize a later override.
+        runtimeStatus = undefined;
         if (!runtimeStatusAbortController?.signal.aborted) api.logger.warn(JSON.stringify({ event: "acce.runtime_status.refresh_failed", error: safeError(error), action: "fail_closed_for_model_override_until_refresh" }));
       } finally {
         runtimeStatusAbortController = undefined;
@@ -136,6 +142,13 @@ export default defineFeaturePlugin({
         return;
       }
 
+      // Do not ask the bridge to select a route unless the local runtime snapshot is fresh.
+      const decisionRuntimeStatus = runtimeStatus;
+      if (!isRuntimeStatusFresh(decisionRuntimeStatus, Date.now(), runtimeStatusMaxAgeMs)) {
+        api.logger.warn(JSON.stringify({ event: "acce.decision.runtime_status_unavailable", action: "keeping-openclaw-default-model" }));
+        return;
+      }
+
       // Never send prompt, attachments, history, or session identifiers to the bridge.
       try {
         const decision = await decisionClient.decide({
@@ -145,7 +158,7 @@ export default defineFeaturePlugin({
           runtime_catalog: runtimeModels.map((model) => ({ providerId: model.providerId, modelId: model.modelId, ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}), ...(model.contextTokens ? { contextTokens: model.contextTokens } : {}), ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}), ...(model.cost ? { cost: model.cost } : {}) })),
           task_signature: taskProfile.categories.slice().sort().join("|"),
           runtime_status_required: true,
-          runtime_status: runtimeStatus ?? null,
+          runtime_status: decisionRuntimeStatus ?? null,
           ...(learnedRouteOrder ? { preferred_route_order: learnedRouteOrder } : {}),
           ...(config.preferredRoutes?.[taskProfile.taskClass] ? { preference: config.preferredRoutes[taskProfile.taskClass] } : {}),
           task_class: taskProfile.taskClass,
@@ -192,6 +205,22 @@ export default defineFeaturePlugin({
             event: "acce.decision.override_not_authorized",
             provider: decision.providerOverride,
             model: decision.modelOverride,
+            action: "keeping-openclaw-default-model",
+          }));
+          return;
+        }
+        const runtimeBlockReason = runtimeOverrideBlockReason(runtimeStatus, decision.providerOverride, decision.modelOverride, {
+          now: Date.now(),
+          maxAgeMs: runtimeStatusMaxAgeMs,
+          // When external routes are enabled, do not select a remote provider without fresh, non-exhausted usage telemetry.
+          requireFreshProviderUsage: config.allowExternalNetwork === true && !isKnownLocalProvider(decision.providerOverride),
+        });
+        if (runtimeBlockReason) {
+          api.logger.warn(JSON.stringify({
+            event: "acce.decision.runtime_eligibility_rejected",
+            provider: decision.providerOverride,
+            model: decision.modelOverride,
+            reason: runtimeBlockReason,
             action: "keeping-openclaw-default-model",
           }));
           return;
@@ -362,8 +391,7 @@ export default defineFeaturePlugin({
       id: "acce-optimizer-runtime-status",
       start() {
         if (!isEnabled(config)) return;
-        const requestedInterval = Number.isFinite(config.runtimeStatusRefreshSeconds) ? Math.floor(config.runtimeStatusRefreshSeconds as number) : 300;
-        const intervalSeconds = Math.max(60, Math.min(900, requestedInterval));
+        const intervalSeconds = runtimeStatusRefreshIntervalSeconds;
         // Keep Gateway-backed CLI calls out of plugin startup and model resolution.
         runtimeStatusStartupTimer = setTimeout(() => { void refreshRuntimeStatus(); }, 15_000);
         runtimeStatusRefreshTimer = setInterval(() => { void refreshRuntimeStatus(); }, intervalSeconds * 1000);
