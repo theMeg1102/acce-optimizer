@@ -64,4 +64,19 @@ describe("ACCE decision bridge client", () => {
   it("rejects invalid bridge URLs", () => {
     expect(() => createDecisionClient({ baseUrl: "file:///tmp/acce" })).toThrow(/Invalid ACCE/);
   });
+
+  it("allows HTTP only for explicit loopback bridge addresses", () => {
+    expect(() => createDecisionClient({ baseUrl: "http://127.0.0.1:18791", bearerToken: "secret" })).not.toThrow();
+    expect(() => createDecisionClient({ baseUrl: "http://localhost:18791" })).not.toThrow();
+    expect(() => createDecisionClient({ baseUrl: "http://[::1]:18791", bearerToken: "secret" })).not.toThrow();
+  });
+
+  it("rejects remote HTTP bridge URLs even when a bearer token is not configured", () => {
+    expect(() => createDecisionClient({ baseUrl: "http://decision.example.com" })).toThrow(/must use HTTPS/);
+    expect(() => createDecisionClient({ baseUrl: "http://decision.example.com", bearerToken: "secret" })).toThrow(/must use HTTPS/);
+  });
+
+  it("allows HTTPS for remote decision bridge URLs with bearer authentication", () => {
+    expect(() => createDecisionClient({ baseUrl: "https://decision.example.com", bearerToken: "secret" })).not.toThrow();
+  });
 });
