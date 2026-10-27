@@ -117,6 +117,8 @@ export async function readOpenClawRuntimeStatus(options: {
   // These are documented, read-only CLI surfaces. Do not use private Gateway RPC.
   const modelsResult = await runner(cliPath, ["models", "list", "--all", "--json"], timeoutMs, options.signal);
   const models = parseModelRows(JSON.parse(modelsResult.stdout));
+  // Timestamp model availability at the point it was read, not after the usage query.
+  const modelsCapturedAt = new Date((options.now ?? Date.now)()).toISOString();
   let usageCapturedAt = "";
   let usage: RuntimeProviderUsage[] = [];
   try {
@@ -129,7 +131,7 @@ export async function readOpenClawRuntimeStatus(options: {
     // data makes quota-metered cloud routes ineligible in the decision service.
   }
   return {
-    modelsCapturedAt: new Date((options.now ?? Date.now)()).toISOString(),
+    modelsCapturedAt,
     usageCapturedAt,
     models,
     usage,
