@@ -50,7 +50,7 @@
       "decisionServiceUrl": {
         "type": "string",
         "format": "uri",
-        "description": "Private ACCE Python DecisionService bridge URL. Configure an address reachable from the Gateway container."
+        "description": "Private ACCE Python DecisionService bridge URL. Loopback may use HTTP; non-loopback endpoints must use HTTPS and be reachable from the Gateway container."
       },
       "decisionServiceToken": {
         "type": "string",
@@ -126,12 +126,12 @@
     },
     "decisionServiceUrl": {
       "label": "ACCE DecisionService URL",
-      "help": "HTTP bridge backed by the canonical Python DecisionService. The service must be reachable from the Gateway container."
+      "help": "Bridge backed by the canonical Python DecisionService. HTTP is allowed only on loopback; remote endpoints must use HTTPS."
     },
     "decisionServiceToken": {
       "label": "DecisionService bearer token",
       "sensitive": true,
-      "help": "Required when the bridge binds beyond loopback."
+      "help": "Keep secret. Remote endpoints must use HTTPS; HTTP is accepted only for loopback addresses."
     },
     "allowExternalNetwork": {
       "label": "Allow external/cloud routes",
