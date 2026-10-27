@@ -44,4 +44,20 @@ describe("OpenClaw read-only CLI runtime status", () => {
     }));
     await expect(readOpenClawRuntimeStatus({ runCli })).rejects.toThrow("models[]");
   });
+
+  it("timestamps model availability before a slower usage query can make the snapshot appear newer", async () => {
+    const modelReadAt = Date.parse("2026-10-27T12:00:00.000Z");
+    const usageReadAt = modelReadAt + 20_000;
+    let clock = modelReadAt;
+    const runCli = vi.fn(async (_file: string, args: string[]) => {
+      if (args[0] === "models") {
+        clock = modelReadAt;
+        return { stderr: "", stdout: JSON.stringify({ models: [{ key: "ollama/qwen3:8b", available: true }] }) };
+      }
+      clock = usageReadAt;
+      return { stderr: "", stdout: JSON.stringify({ usage: { updatedAt: modelReadAt, providers: [] } }) };
+    });
+    const result = await readOpenClawRuntimeStatus({ runCli, now: () => clock });
+    expect(result.modelsCapturedAt).toBe(new Date(modelReadAt).toISOString());
+  });
 });
