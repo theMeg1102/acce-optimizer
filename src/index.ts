@@ -15,7 +15,7 @@ import { evaluateSimilarityWindow } from "./task-similarity.js";
 import { readConfiguredRuntimeModels, sanitizeModelTelemetry } from "./openclaw-runtime-state.js";
 import { isModelOverrideAllowed } from "./openclaw-override-policy.js";
 import { readOpenClawRuntimeStatus, type OpenClawRuntimeStatus } from "./openclaw-cli-runtime-status.js";
-import { isKnownLocalProvider, isRuntimeStatusFresh, runtimeOverrideBlockReason } from "./runtime-status-policy.js";
+import { isRuntimeStatusFresh, runtimeOverrideBlockReason } from "./runtime-status-policy.js";
 
 type AccePluginConfig = {
   enabled?: boolean;
@@ -209,20 +209,9 @@ export default defineFeaturePlugin({
           }));
           return;
         }
-        if (config.allowExternalNetwork !== true && !isKnownLocalProvider(decision.providerOverride)) {
-          api.logger.warn(JSON.stringify({
-            event: "acce.decision.external_route_rejected",
-            provider: decision.providerOverride,
-            model: decision.modelOverride,
-            action: "keeping-openclaw-default-model",
-          }));
-          return;
-        }
         const runtimeBlockReason = runtimeOverrideBlockReason(runtimeStatus, decision.providerOverride, decision.modelOverride, {
           now: Date.now(),
           maxAgeMs: runtimeStatusMaxAgeMs,
-          // When external routes are enabled, do not select a remote provider without fresh, non-exhausted usage telemetry.
-          requireFreshProviderUsage: config.allowExternalNetwork === true && !isKnownLocalProvider(decision.providerOverride),
         });
         if (runtimeBlockReason) {
           api.logger.warn(JSON.stringify({
