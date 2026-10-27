@@ -209,6 +209,15 @@ export default defineFeaturePlugin({
           }));
           return;
         }
+        if (config.allowExternalNetwork !== true && !isKnownLocalProvider(decision.providerOverride)) {
+          api.logger.warn(JSON.stringify({
+            event: "acce.decision.external_route_rejected",
+            provider: decision.providerOverride,
+            model: decision.modelOverride,
+            action: "keeping-openclaw-default-model",
+          }));
+          return;
+        }
         const runtimeBlockReason = runtimeOverrideBlockReason(runtimeStatus, decision.providerOverride, decision.modelOverride, {
           now: Date.now(),
           maxAgeMs: runtimeStatusMaxAgeMs,
