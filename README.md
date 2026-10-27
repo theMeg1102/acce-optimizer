@@ -39,8 +39,8 @@ Configure these fields in OpenClaw → Settings → Plugins → ACCE Optimizer:
 | --- | --- | --- |
 | `enabled` | `true` | Enable the plugin |
 | `mode` | `adaptive` | `adaptive` applies the governed A* graph decision; `shadow` observes only |
-| `decisionServiceUrl` | unset | Private HTTP bridge URL to the Python ACCE DecisionService; required for adaptive routing |
-| `decisionServiceToken` | unset | Bearer token for the bridge when it is bound beyond loopback |
+| `decisionServiceUrl` | unset | Private Python ACCE DecisionService bridge URL; HTTP is allowed only on loopback, and remote endpoints must use HTTPS |
+| `decisionServiceToken` | unset | Secret bearer token for the bridge. Never send it over remote plain HTTP |
 | `allowExternalNetwork` | `false` | Explicitly allow cloud routes, subject to fresh trusted state and route governance |
 | `maxCloudCostUsd` | `0` | Per-request cloud cost ceiling; cloud routes stay blocked at zero |
 | `autoDiscoverOnStartup` | `true` | Run initial discovery only when inventory is empty |
@@ -64,7 +64,7 @@ Install the repository's Python package in the ACCE runtime environment, then st
     export ACCE_DECISION_PORT=18791
     acce-decision-server
 
-If the Gateway runs in Docker and the bridge runs on the Aurora host, bind only to a private host interface reachable from that container, set a strong ACCE_DECISION_TOKEN, and firewall port 18791 to the Docker network. Do not expose the bridge publicly; it uses plain HTTP and bearer-token authentication, not TLS. Configure decisionServiceUrl to that reachable address and decisionServiceToken to the same token. A loopback URL inside the Gateway container points to the container itself, not the host.
+If the Gateway runs in Docker and the bridge runs on the Aurora host, bind only to a private host interface reachable from that container, set a strong ACCE_DECISION_TOKEN, and firewall port 18791 to the Docker network. The Python bridge uses plain HTTP and does not terminate TLS itself, so expose it to the Gateway through a trusted HTTPS reverse proxy or TLS tunnel; the plugin rejects non-loopback HTTP URLs to protect bearer tokens. Configure decisionServiceUrl with the HTTPS address reachable from the container and decisionServiceToken with the same token. A loopback URL inside the Gateway container points to the container itself, not the host.
 
 The bridge exposes GET /health and POST /v1/decide, /v1/observations, and /v1/outcomes. It reads the operator-owned registry for every decision, requires the strict production-registry contract, and calls DecisionService.adaptive_decision(). An example or incomplete registry is rejected rather than activated. Minimized latency/context evidence is stored separately at ACCE_OBSERVATIONS_PATH (default: acce-discovery-observations.json beside the registry); route outcomes are stored at ACCE_ROUTE_OUTCOMES_PATH (default: acce-route-outcomes.json beside the registry). Both stores use atomic writes and private file permissions. Effective context budgets only reduce a route's admitted context window. Configured `maxTokens` is a hard output cap when a request supplies an expected-output token estimate; ACCE excludes routes that cannot meet that requirement rather than silently clipping the task. New inventory entries are never promoted to production routes. Set ACCE_DECISION_LOG_PATH to persist minimized decision evidence for later analysis; the existing logger hashes the task summary and does not store raw prompt text.
 
