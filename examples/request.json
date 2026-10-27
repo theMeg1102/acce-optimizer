@@ -1,0 +1,27 @@
+{
+  "request_id": "example-request-001",
+  "task_class": "general",
+  "summary": "Generate a concise explanation of a technical concept.",
+  "required_capabilities": [
+    "text-generation"
+  ],
+  "profile": "balanced",
+  "constraints": {
+    "external_network_allowed": false,
+    "tools_allowed": false,
+    "economic_budget": {
+      "max_cloud_cost_usd": 0.0
+    },
+    "context_budget": {
+      "current_tokens": 0,
+      "estimated_input_tokens": 32,
+      "expected_output_tokens": 256
+    }
+  },
+  "governance": {
+    "approval_required": false,
+    "approval_granted": false,
+    "validation_required": true,
+    "clarification_required": false
+  }
+}
