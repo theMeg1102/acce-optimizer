@@ -101,7 +101,7 @@ describe("ACCE runtime status refresh failure", () => {
       registerCli: vi.fn(),
     };
 
-    (plugin as unknown as { setup: (api: typeof api) => void }).setup(api);
+    (plugin as unknown as { setup: (api: any) => void }).setup(api);
     const runtimeService = services.find((service) => service.id === "acce-optimizer-runtime-status");
     expect(runtimeService).toBeDefined();
     runtimeService?.start();
