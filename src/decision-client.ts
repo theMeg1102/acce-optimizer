@@ -30,6 +30,11 @@ export function createDecisionClient(params: {
         endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
       throw new TypeError("Invalid ACCE decision service URL");
     }
+    const hostname = endpoint.hostname.toLowerCase().replace(/^\[|\]$/gu, "");
+    const isLoopbackHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+    if (endpoint.protocol === "http:" && !isLoopbackHost) {
+      throw new TypeError("Remote ACCE decision service URLs must use HTTPS");
+    }
     endpoint.pathname = `${endpoint.pathname.replace(/\/$/u, "")}/v1/decide`;
   }
   const fetchImpl = params.fetchImpl ?? fetch;
