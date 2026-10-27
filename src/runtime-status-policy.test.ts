@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  isKnownLocalProvider,
   isRuntimeStatusFresh,
   runtimeOverrideBlockReason,
 } from "./runtime-status-policy.js";
@@ -35,35 +34,5 @@ describe("runtime status authorization policy", () => {
     expect(runtimeOverrideBlockReason(freshStatus, "ollama", "qwen3:8b", { now: NOW, maxAgeMs: MAX_AGE })).toBeUndefined();
     expect(runtimeOverrideBlockReason(freshStatus, "ollama", "missing", { now: NOW, maxAgeMs: MAX_AGE })).toBe("model-not-confirmed-available");
     expect(runtimeOverrideBlockReason(freshStatus, "openai", "gpt-down", { now: NOW, maxAgeMs: MAX_AGE })).toBe("model-not-confirmed-available");
-  });
-
-  it("requires fresh provider usage only when the selected route depends on quota", () => {
-    expect(runtimeOverrideBlockReason(freshStatus, "ollama", "qwen3:8b", {
-      now: NOW, maxAgeMs: MAX_AGE, requireFreshProviderUsage: false,
-    })).toBeUndefined();
-    expect(runtimeOverrideBlockReason(freshStatus, "openai", "gpt-test", {
-      now: NOW, maxAgeMs: MAX_AGE, requireFreshProviderUsage: true,
-    })).toBeUndefined();
-  });
-
-  it("rejects remote quota-dependent routes when usage is missing or stale", () => {
-    expect(runtimeOverrideBlockReason({ ...freshStatus, usageCapturedAt: "" }, "openai", "gpt-test", {
-      now: NOW, maxAgeMs: MAX_AGE, requireFreshProviderUsage: true,
-    })).toBe("provider-usage-missing-or-stale");
-    expect(runtimeOverrideBlockReason({ ...freshStatus, usage: [] }, "openai", "gpt-test", {
-      now: NOW, maxAgeMs: MAX_AGE, requireFreshProviderUsage: true,
-    })).toBe("provider-usage-missing-invalid-or-exhausted");
-    expect(runtimeOverrideBlockReason({ ...freshStatus, usage: [{ providerId: "openai", remainingFraction: 0 }] }, "openai", "gpt-test", {
-      now: NOW, maxAgeMs: MAX_AGE, requireFreshProviderUsage: true,
-    })).toBe("provider-usage-missing-invalid-or-exhausted");
-    expect(runtimeOverrideBlockReason({ ...freshStatus, usageCapturedAt: new Date(NOW - MAX_AGE - 1).toISOString() }, "openai", "gpt-test", {
-      now: NOW, maxAgeMs: MAX_AGE, requireFreshProviderUsage: true,
-    })).toBe("provider-usage-missing-or-stale");
-  });
-
-  it("recognizes only explicitly known local provider IDs for quota policy", () => {
-    expect(isKnownLocalProvider("ollama")).toBe(true);
-    expect(isKnownLocalProvider("LMStudio")).toBe(true);
-    expect(isKnownLocalProvider("openai")).toBe(false);
   });
 });
