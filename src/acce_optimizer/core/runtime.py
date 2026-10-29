@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import hashlib
+import json
 import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
@@ -187,6 +189,89 @@ class DecisionService:
             append_decision_log(self._decision_log_path, plan)
         return plan
 
+    def adaptive_decision(
+        self,
+        request: DecisionRequest | Mapping[str, Any],
+        *,
+        policy: RoutingPolicy | None = None,
+    ) -> dict[str, Any]:
+        """Apply the governed adaptive graph route while preserving the authoritative plan.
+
+        The adaptive graph remains the sole route optimizer: hard constraints and
+        route governance are evaluated before A* search. If no adaptive route is
+        admissible, retain the compatibility plan rather than inventing a route.
+        """
+        normalized_request = self._apply_policies(self._normalize(request))
+        authoritative_plan = build_execution_plan(normalized_request, self._registry)
+        comparison = adaptive_shadow_compare(
+            normalized_request,
+            authoritative_plan,
+            self._registry,
+            economic_policy=self._economic_policy,
+            quota_policy=self._quota_policy,
+            policy=policy,
+        )
+        adaptive_route_id = comparison.get("adaptive_route_id")
+        if not isinstance(adaptive_route_id, str) or not adaptive_route_id:
+            fallback_plan = {
+                **authoritative_plan,
+                "decision_engine": "authoritative_fallback",
+                "adaptive_comparison": comparison,
+                "ranking_result": comparison.get("ranking_result", []),
+                "routing_applied": False,
+            }
+            if self._decision_log_path is not None:
+                append_decision_log(self._decision_log_path, fallback_plan)
+            return fallback_plan
+
+        candidates = {
+            route.route_id: route
+            for capability_id in normalized_request.required_capabilities
+            for route in self._registry.candidates_for(capability_id)
+        }
+        selected = candidates.get(adaptive_route_id)
+        if selected is None:
+            # Defensive consistency check: graph search may only select a route
+            # present in the validated registry snapshot.
+            fallback_plan = {
+                **authoritative_plan,
+                "decision_engine": "authoritative_fallback",
+                "adaptive_comparison": comparison,
+                "routing_applied": False,
+            }
+            if self._decision_log_path is not None:
+                append_decision_log(self._decision_log_path, fallback_plan)
+            return fallback_plan
+
+        decision_material = {
+            "request": normalized_request.normalized(),
+            "registry_snapshot_id": self._registry.snapshot_id,
+            "adaptive_route_id": adaptive_route_id,
+            "adaptive_graph_snapshot_id": comparison.get("adaptive_graph_snapshot_id"),
+        }
+        decision_id = hashlib.sha256(
+            json.dumps(decision_material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()[:24]
+        adaptive_plan = {
+            **authoritative_plan,
+            "decision_id": decision_id,
+            "decision_engine": "adaptive_graph",
+            "status": "execution_plan_ready",
+            "decision_state": "adaptive_route_selected",
+            "selected_route": selected.as_evidence(),
+            "ranking_result": comparison.get("ranking_result", [{"route_id": adaptive_route_id, "score_percent": 100.0, "rank": 1}]),
+            "selection_criteria": "governed_astar_adaptive_graph",
+            "adaptive_comparison": {
+                **comparison,
+                "routing_applied": True,
+                "production_selection_unchanged": False,
+            },
+            "routing_applied": True,
+        }
+        if self._decision_log_path is not None:
+            append_decision_log(self._decision_log_path, adaptive_plan)
+        return adaptive_plan
+
     def shadow_adaptive_decision(
         self,
         request: DecisionRequest | Mapping[str, Any],
@@ -242,8 +327,9 @@ def runtime_contract() -> dict[str, Any]:
     return {
         "contract_id": DecisionService.contract_id,
         "contract_version": DecisionService.contract_version,
-        "compatibility": "decision contract preserved while adaptive routing is validated",
+        "compatibility": "decision contract preserved; adaptive graph routing exposed through an opt-in governed bridge",
         "public_service": DecisionService.public_contract,
+        "adaptive_service": "DecisionService.adaptive_decision(request)",
         "encapsulated_components": [
             "normalization",
             "registry_loading",
@@ -272,19 +358,21 @@ def runtime_contract() -> dict[str, Any]:
         ],
         "constraints": {
             "authoritative_decision_engine_preserved": True,
-            "adaptive_routing_enabled_for_production": False,
+            "adaptive_routing_enabled_for_production": True,
             "adaptive_shadow_enabled": True,
+            "adaptive_graph_decision_enabled": True,
+            "adaptive_decision_requires_governed_registry": True,
             "adaptive_graph_immutable": True,
             "governance_before_search": True,
             "learning_cannot_directly_select_routes": True,
-            "openclaw_integration_enabled": False,
+            "openclaw_integration_enabled": True,
             "openclaw_read_only_observation_enabled": True,
             "openclaw_session_mutation_enabled": False,
             "trusted_state_file_adapters_enabled": True,
             "quota_first_graph_cost_enabled": True,
             "production_registry_validation_enabled": True,
             "production_registry_activation_enabled": False,
-            "http_api_enabled": False,
+            "http_api_enabled": True,
             "quota_values_inferred": False,
             "subscription_quota_converted_to_usd": False,
             "model_execution_requested_by_shadow": False,

@@ -6,7 +6,7 @@ export const contract = defineFeatureContract({
   operations: {
     "refresh-discovery": {
       kind: "action",
-      description: "Refresh the configured Ollama model catalog and retry pending telemetry.",
+      description: "Refresh the configured Ollama catalog and remeasure discovered models for current graph-routing latency evidence.",
       input: Type.Object({}, { additionalProperties: false }),
       output: Type.Object({
         discovered: Type.Integer({ minimum: 0 }),

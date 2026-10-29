@@ -26,7 +26,7 @@ export default defineControlUiPlugin({
         heading.textContent = "ACCE Optimizer";
         const intro = document.createElement("p");
         intro.textContent =
-          "Discover configured Ollama models on first startup, then recalibrate whenever you choose. Existing inventories are refreshed rather than duplicated.";
+          "Discover and measure configured Ollama models, then feed captured latency evidence into the existing ACCE adaptive graph. Existing inventories are refreshed rather than duplicated.";
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = "Recalibrate discovery now";
@@ -38,7 +38,7 @@ export default defineControlUiPlugin({
         const note = document.createElement("p");
         note.className = "acce-discovery-note";
         note.textContent =
-          "Configure the Ollama URL and first-start behavior in OpenClaw → Settings → Plugins → ACCE Optimizer. Production model routing remains disabled.";
+          "Configure the decision bridge URL/token, Ollama endpoint, and cloud-route policy in OpenClaw → Settings → Plugins → ACCE Optimizer. Cloud routes remain disabled unless fresh trusted quota/context state and the usage ledger are configured on the bridge. Newly discovered models are never auto-promoted into the governed registry.";
 
         let disposed = false;
         const updateAvailability = () => {
@@ -65,7 +65,7 @@ export default defineControlUiPlugin({
               `Existing records refreshed: ${result.refreshed}`,
               `Telemetry captured: ${result.telemetryCaptured}`,
               `Telemetry pending: ${result.telemetryPending}`,
-              `Production eligible: ${result.productionEligible}`,
+              `Newly discovered models auto-promoted: ${result.productionEligible}`,
             ].join("\n");
           } catch (error) {
             if (!disposed && !context.signal.aborted) {

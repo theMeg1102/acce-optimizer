@@ -2,16 +2,18 @@ name: CI
 
 on:
   push:
-    branches: ["main", "feature/**", "integration/**"]
+    branches: ["main", "feature/**", "integration/**", "fix/**"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  python-tests:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
@@ -25,17 +27,69 @@ jobs:
 
   openclaw-plugin:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: integrations/openclaw/acce-optimizer
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: integrations/openclaw/acce-optimizer/package.json
+          cache-dependency-path: package.json
       - run: npm install
       - run: npm test
       - run: npm run build
+      - name: Isolated OpenClaw 2026.10.5 CLI smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/acce-openclaw-home"
+          mkdir -p "$HOME"
+          cli_version="$(node_modules/.bin/openclaw --version)"
+          case "$cli_version" in
+            *2026.10.5*) ;;
+            *) echo "Expected OpenClaw 2026.10.5, got: $cli_version" >&2; exit 1 ;;
+          esac
+          cat > "$RUNNER_TEMP/acce-openclaw-smoke-cli" <<'SH'
+          #!/bin/sh
+          exec "$GITHUB_WORKSPACE/node_modules/.bin/openclaw" --profile acce-ci-smoke "$@"
+          SH
+          chmod 700 "$RUNNER_TEMP/acce-openclaw-smoke-cli"
+          ACCE_OPENCLAW_CLI_PATH="$RUNNER_TEMP/acce-openclaw-smoke-cli" node --input-type=module <<'NODE'
+          import { readOpenClawRuntimeStatus } from "./dist/openclaw-cli-runtime-status.js";
+          const snapshot = await readOpenClawRuntimeStatus({
+            cliPath: process.env.ACCE_OPENCLAW_CLI_PATH,
+            timeoutMs: 15000,
+          });
+          if (!Number.isFinite(Date.parse(snapshot.modelsCapturedAt))) {
+            throw new Error("OpenClaw CLI smoke test did not capture model catalog time");
+          }
+          if (!Array.isArray(snapshot.models) || snapshot.models.length === 0) {
+            throw new Error("OpenClaw CLI smoke test did not return model rows");
+          }
+          if (!snapshot.models.every((model) =>
+            typeof model.providerId === "string" &&
+            typeof model.modelId === "string" &&
+            (model.available === true || model.available === false || model.available === null)
+          )) {
+            throw new Error("OpenClaw CLI smoke test returned invalid availability values");
+          }
+          const availability = {
+            available: snapshot.models.filter((model) => model.available === true).length,
+            unavailable: snapshot.models.filter((model) => model.available === false).length,
+            unknown: snapshot.models.filter((model) => model.available === null).length,
+          };
+          console.log(JSON.stringify({
+            cli: "OpenClaw 2026.10.5",
+            profile: "acce-ci-smoke",
+            modelRows: snapshot.models.length,
+            availability,
+            usageSnapshotPresent: Boolean(snapshot.usageCapturedAt),
+          }));
+          NODE
       - run: npm run plugin:validate
+      - name: Pack OpenClaw plugin candidate
+        run: npm pack --pack-destination "$RUNNER_TEMP"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: acce-optimizer-openclaw-0.1.3
+          path: ${{ runner.temp }}/openclaw-plugin-acce-optimizer-0.1.3.tgz
+          if-no-files-found: error
