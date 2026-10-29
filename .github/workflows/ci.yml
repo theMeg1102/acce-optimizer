@@ -37,6 +37,41 @@ jobs:
       - run: npm install
       - run: npm test
       - run: npm run build
+      - name: Isolated OpenClaw 2026.10.5 CLI smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/acce-openclaw-home"
+          mkdir -p "$HOME"
+          cli_version="$(node_modules/.bin/openclaw --version)"
+          case "$cli_version" in
+            *2026.10.5*) ;;
+            *) echo "Expected OpenClaw 2026.10.5, got: $cli_version" >&2; exit 1 ;;
+          esac
+          cat > "$RUNNER_TEMP/acce-openclaw-smoke-cli" <<'SH'
+          #!/bin/sh
+          exec "$GITHUB_WORKSPACE/node_modules/.bin/openclaw" --profile acce-ci-smoke "$@"
+          SH
+          chmod 700 "$RUNNER_TEMP/acce-openclaw-smoke-cli"
+          ACCE_OPENCLAW_CLI_PATH="$RUNNER_TEMP/acce-openclaw-smoke-cli" node --input-type=module <<'NODE'
+          import { readOpenClawRuntimeStatus } from "./dist/openclaw-cli-runtime-status.js";
+          const snapshot = await readOpenClawRuntimeStatus({
+            cliPath: process.env.ACCE_OPENCLAW_CLI_PATH,
+            timeoutMs: 15000,
+          });
+          if (!Number.isFinite(Date.parse(snapshot.modelsCapturedAt))) {
+            throw new Error("OpenClaw CLI smoke test did not capture model catalog time");
+          }
+          if (!Array.isArray(snapshot.models)) {
+            throw new Error("OpenClaw CLI smoke test did not return a model array");
+          }
+          console.log(JSON.stringify({
+            cli: "OpenClaw 2026.10.5",
+            profile: "acce-ci-smoke",
+            modelRows: snapshot.models.length,
+            usageSnapshotPresent: Boolean(snapshot.usageCapturedAt),
+          }));
+          NODE
       - run: npm run plugin:validate
       - name: Pack OpenClaw plugin candidate
         run: npm pack --pack-destination "$RUNNER_TEMP"
