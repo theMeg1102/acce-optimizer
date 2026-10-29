@@ -62,13 +62,26 @@ jobs:
           if (!Number.isFinite(Date.parse(snapshot.modelsCapturedAt))) {
             throw new Error("OpenClaw CLI smoke test did not capture model catalog time");
           }
-          if (!Array.isArray(snapshot.models)) {
-            throw new Error("OpenClaw CLI smoke test did not return a model array");
+          if (!Array.isArray(snapshot.models) || snapshot.models.length === 0) {
+            throw new Error("OpenClaw CLI smoke test did not return model rows");
           }
+          if (!snapshot.models.every((model) =>
+            typeof model.providerId === "string" &&
+            typeof model.modelId === "string" &&
+            (model.available === true || model.available === false || model.available === null)
+          )) {
+            throw new Error("OpenClaw CLI smoke test returned invalid availability values");
+          }
+          const availability = {
+            available: snapshot.models.filter((model) => model.available === true).length,
+            unavailable: snapshot.models.filter((model) => model.available === false).length,
+            unknown: snapshot.models.filter((model) => model.available === null).length,
+          };
           console.log(JSON.stringify({
             cli: "OpenClaw 2026.10.5",
             profile: "acce-ci-smoke",
             modelRows: snapshot.models.length,
+            availability,
             usageSnapshotPresent: Boolean(snapshot.usageCapturedAt),
           }));
           NODE
