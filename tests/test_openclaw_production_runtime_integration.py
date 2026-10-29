@@ -130,3 +130,56 @@ def test_production_registry_does_not_override_when_openclaw_reports_unavailable
 
     assert result["providerOverride"] is None
     assert result["modelOverride"] is None
+
+
+def test_decision_bridge_http_round_trip_authenticates_and_selects_runtime_model(tmp_path: Path, monkeypatch) -> None:
+    from http.server import ThreadingHTTPServer
+    import threading
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
+
+    from acce_optimizer.core.decision_server import make_handler
+
+    registry_path = tmp_path / "production-registry.json"
+    registry_path.write_text(json.dumps(_production_registry()), encoding="utf-8")
+    observations_path = tmp_path / "observations.json"
+    monkeypatch.setenv("ACCE_ISSUED_DECISIONS_PATH", str(tmp_path / "issued-decisions.json"))
+    monkeypatch.setenv("ACCE_ROUTE_OUTCOMES_PATH", str(tmp_path / "route-outcomes.json"))
+    monkeypatch.setenv("ACCE_TRUSTED_STATE_TELEMETRY_PATH", str(tmp_path / "missing-telemetry.json"))
+    monkeypatch.setenv("ACCE_USAGE_LEDGER_PATH", str(tmp_path / "missing-usage-ledger.json"))
+
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", 0),
+        make_handler(registry_path, observations_path, "integration-token"),
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    endpoint = f"http://127.0.0.1:{server.server_port}/v1/decide"
+    body = json.dumps(_payload(available=True)).encode("utf-8")
+    try:
+        unauthenticated = Request(endpoint, data=body, headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            urlopen(unauthenticated, timeout=3)
+            raise AssertionError("decision bridge accepted a request without its bearer token")
+        except HTTPError as error:
+            assert error.code == 401
+
+        authenticated = Request(
+            endpoint,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer integration-token",
+            },
+            method="POST",
+        )
+        with urlopen(authenticated, timeout=3) as response:
+            result = json.loads(response.read().decode("utf-8"))
+            assert response.status == 200
+        assert result["providerOverride"] == "local-provider"
+        assert result["modelOverride"] == "qwen3:8b"
+        assert result["selected_route"]["route_id"] == "local-route-qwen3"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
