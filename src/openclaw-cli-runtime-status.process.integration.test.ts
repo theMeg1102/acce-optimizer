@@ -11,13 +11,13 @@ describe("OpenClaw CLI subprocess smoke test", () => {
     const cliPath = join(directory, "openclaw-fixture");
     const callsPathForShell = callsPath.replaceAll("'", "'\\''");
     const script = `#!/bin/sh
-printf '%s\\n' "$*" >> '${callsPathForShell}'
+printf '%s\n' "$*" >> '${callsPathForShell}'
 if [ "$1" = "models" ] && [ "$2" = "list" ]; then
-  printf '%s\\n' '{"models":[{"key":"ollama/qwen3:8b","available":true,"contextWindow":32768}]}'
+  printf '%s\n' '{"models":[{"key":"ollama/qwen3:8b","available":true,"contextWindow":32768}]}'
   exit 0
 fi
 if [ "$1" = "status" ] && [ "$2" = "--usage" ]; then
-  printf '%s\\n' '{"usage":{"updatedAt":1792539466217,"providers":[{"provider":"cloud-provider","windows":[{"label":"5h","usedPercent":25}]}]}}'
+  printf '%s\n' '{"usage":{"updatedAt":1792539466217,"providers":[{"provider":"cloud-provider","windows":[{"label":"5h","usedPercent":25}]}]}}'
   exit 0
 fi
 exit 41
@@ -37,7 +37,7 @@ exit 41
       ]);
       expect(result.usage).toEqual([{ providerId: "cloud-provider", remainingFraction: 0.75 }]);
       expect(result.usageCapturedAt).toBe(new Date(1792539466217).toISOString());
-      expect((await readFile(callsPath, "utf8")).trim().split("\\n")).toEqual([
+      expect((await readFile(callsPath, "utf8")).trim().split("\n")).toEqual([
         "models list --all --json",
         "status --usage --json --timeout 2000",
       ]);
