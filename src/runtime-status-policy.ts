@@ -37,10 +37,12 @@ export function runtimeOverrideBlockReason(
     return "runtime-status-missing-or-stale";
   }
 
-  const model = status?.models?.find((candidate) =>
+  // Ambiguous duplicate rows must never authorize an override, even if the
+  // first row reports availability. Require exactly one affirmative match.
+  const matches = status?.models?.filter((candidate) =>
     candidate.providerId === providerId && candidate.modelId === modelId
-  );
-  if (!model || model.available !== true) {
+  ) ?? [];
+  if (matches.length !== 1 || matches[0].available !== true) {
     return "model-not-confirmed-available";
   }
 
