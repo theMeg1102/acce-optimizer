@@ -30,6 +30,17 @@ describe("runtime status authorization policy", () => {
     expect(isRuntimeStatusFresh({ ...freshStatus, modelsCapturedAt: new Date(NOW + 60_000).toISOString() }, NOW, MAX_AGE)).toBe(false);
   });
 
+  it("fails closed on duplicate exact model rows, including contradictory availability", () => {
+    const available = { providerId: "ollama", modelId: "qwen3:8b", available: true as const };
+    const unavailable = { providerId: "ollama", modelId: "qwen3:8b", available: false as const };
+    for (const duplicates of [[available, unavailable], [unavailable, available], [available, available]]) {
+      expect(runtimeOverrideBlockReason(
+        { ...freshStatus, models: [...freshStatus.models.filter((model) => model.providerId !== "ollama"), ...duplicates] },
+        "ollama", "qwen3:8b", { now: NOW, maxAgeMs: MAX_AGE },
+      )).toBe("model-not-confirmed-available");
+    }
+  });
+
   it("requires an exact model row with available=true", () => {
     expect(runtimeOverrideBlockReason(freshStatus, "ollama", "qwen3:8b", { now: NOW, maxAgeMs: MAX_AGE })).toBeUndefined();
     expect(runtimeOverrideBlockReason(freshStatus, "ollama", "missing", { now: NOW, maxAgeMs: MAX_AGE })).toBe("model-not-confirmed-available");
