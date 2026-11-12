@@ -35,6 +35,25 @@ jobs:
           cache: npm
           cache-dependency-path: package.json
       - run: npm install
+      - name: Audit production dependency risk
+        shell: bash
+        run: |
+          set -euo pipefail
+          # npm audit exits nonzero when it finds vulnerabilities; capture the
+          # report so we can distinguish runtime dependencies from dev tools.
+          npm audit --omit=dev --json > "$RUNNER_TEMP/acce-production-audit.json" || true
+          node --input-type=module - "$RUNNER_TEMP/acce-production-audit.json" <<'NODE'
+          import fs from "node:fs";
+          const report = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (report.error || !report.metadata?.vulnerabilities) {
+            throw new Error("Production dependency audit could not be completed");
+          }
+          const counts = report.metadata.vulnerabilities;
+          console.log("Production dependency audit:", JSON.stringify(counts));
+          if ((counts.high ?? 0) > 0 || (counts.critical ?? 0) > 0) {
+            throw new Error("High or critical production dependency vulnerabilities require review");
+          }
+          NODE
       - run: npm test
       - run: npm run build
       - name: Isolated OpenClaw 2026.10.5 CLI smoke
