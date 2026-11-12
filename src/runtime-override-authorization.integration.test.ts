@@ -121,6 +121,18 @@ describe("ACCE override authorization integration", () => {
     return result;
   }
 
+  it("keeps OpenClaw's default when the decision bridge fails", async () => {
+    mocks.decide.mockRejectedValueOnce(new Error("isolated bridge unavailable"));
+    await expect(invokeHook(true, ["ollama/qwen3:8b"])).resolves.toBeUndefined();
+    expect(mocks.decide).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps OpenClaw's default when the bridge returns no admissible plan", async () => {
+    mocks.decide.mockResolvedValueOnce({ status: "no_admissible_route" });
+    await expect(invokeHook(true, ["ollama/qwen3:8b"])).resolves.toBeUndefined();
+    expect(mocks.decide).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps OpenClaw's default when explicit operator opt-in is absent", async () => {
     await expect(invokeHook(false)).resolves.toBeUndefined();
     expect(mocks.decide).toHaveBeenCalledTimes(1);
