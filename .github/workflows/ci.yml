@@ -74,6 +74,7 @@ jobs:
           chmod 700 "$RUNNER_TEMP/acce-openclaw-smoke-cli"
           ACCE_OPENCLAW_CLI_PATH="$RUNNER_TEMP/acce-openclaw-smoke-cli" node --input-type=module <<'NODE'
           import { readOpenClawRuntimeStatus } from "./dist/openclaw-cli-runtime-status.js";
+          import { runtimeOverrideBlockReason } from "./dist/runtime-status-policy.js";
           const snapshot = await readOpenClawRuntimeStatus({
             cliPath: process.env.ACCE_OPENCLAW_CLI_PATH,
             timeoutMs: 15000,
@@ -96,6 +97,19 @@ jobs:
             unavailable: snapshot.models.filter((model) => model.available === false).length,
             unknown: snapshot.models.filter((model) => model.available === null).length,
           };
+          // Exercise the real OpenClaw CLI snapshot against ACCE's override
+          // policy. An isolated profile without credentials must fail closed.
+          if (availability.available !== 0) {
+            throw new Error("Isolated OpenClaw profile unexpectedly reports an available model");
+          }
+          for (const model of snapshot.models) {
+            const reason = runtimeOverrideBlockReason(snapshot, model.providerId, model.modelId, {
+              now: Date.now(), maxAgeMs: 120_000,
+            });
+            if (reason !== "model-not-confirmed-available") {
+              throw new Error(`Unconfigured model ${model.providerId}/${model.modelId} was not blocked: ${reason}`);
+            }
+          }
           console.log(JSON.stringify({
             cli: "OpenClaw 2026.10.5",
             profile: "acce-ci-smoke",
