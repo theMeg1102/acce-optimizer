@@ -133,6 +133,29 @@ describe("ACCE override authorization integration", () => {
     expect(mocks.decide).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects an override when the live model row is unavailable", async () => {
+    mocks.readRuntimeStatus.mockResolvedValueOnce({
+      modelsCapturedAt: new Date(Date.now()).toISOString(),
+      usageCapturedAt: new Date(Date.now()).toISOString(),
+      models: [{ providerId: "ollama", modelId: "qwen3:8b", available: false }],
+      usage: [],
+    });
+    await expect(invokeHook(true, ["ollama/qwen3:8b"])).resolves.toBeUndefined();
+  });
+
+  it("rejects a conflicting duplicate model catalog even when the bridge authorizes the route", async () => {
+    mocks.readRuntimeStatus.mockResolvedValueOnce({
+      modelsCapturedAt: new Date(Date.now()).toISOString(),
+      usageCapturedAt: new Date(Date.now()).toISOString(),
+      models: [
+        { providerId: "ollama", modelId: "qwen3:8b", available: true },
+        { providerId: "ollama", modelId: "qwen3:8b", available: false },
+      ],
+      usage: [],
+    });
+    await expect(invokeHook(true, ["ollama/qwen3:8b"])).resolves.toBeUndefined();
+  });
+
   it("keeps OpenClaw's default when explicit operator opt-in is absent", async () => {
     await expect(invokeHook(false)).resolves.toBeUndefined();
     expect(mocks.decide).toHaveBeenCalledTimes(1);
