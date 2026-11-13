@@ -176,3 +176,17 @@ Operator supplied journal output from `sudo journalctl -u ollama --since "30 min
 This **confirms the Vulkan GPU backend** for the observed runner. Offload count applies to the particular loading stage, not necessarily every auxiliary multimodal component. The filtered last 80 lines do not show a preceding unload/eviction event, and cannot establish why the previous identical request had `load_duration=16.151s`. Do not infer memory pressure or a scheduler bug without temporal corroboration. Future benchmarks must record the specific backend from runtime evidence and remain vendor-agnostic.
 
 Operator confirmed host is behind an ONT using CGNAT and has network segmentation. Document this as operator-reported network context, **not proof** that `OLLAMA_HOST=0.0.0.0:11434` is inaccessible from all unauthorized LAN segments. Do not change bind address or network configuration during the current test.
+
+## OpenClaw/Ollama latency optimization research and additional runner evidence
+
+Operator reports simple local-agent questions often take >=2 minutes via OpenClaw, while direct Ollama throughput for `gemma4:e4b` measured 44.05 generated tokens/s on a capped 128-token test. Prior Gateway telemetry for `gemma4:12b-it-qat` showed `inputTokens:47141`, `outputTokens:548`, `durationMs:205258`, and `contextTokenBudget:32768`; investigate how input-token accounting relates to the effective context budget instead of assuming they represent the same quantity.
+
+Additional operator-supplied journal excerpt (2026-11-12 19:56–19:59) shows repeated llama-server startup for the same model blob at different `-c` values: 2048 at 19:56:52, 32768 at 19:58:50, and 2048 at 19:59:02. Also contains `forcing full prompt re-processing due to lack of cache data (likely due to SWA or hybrid/recurrent memory)` at 19:56:49 and 19:58:49; `disabling multimodal projector offload` with `reason=shared-memory-gpu`; Vulkan memory fitting, including GPU-reported available/free ~22.9/23.4 GiB (not equivalent to physical dedicated VRAM). These observations support investigating runtime reinitialization, context variation, and prompt-cache behavior, **not** declaring eviction/memory pressure proven.
+
+Official documentation:
+- https://docs.openclaw.ai/providers/ollama/troubleshooting — tune per-model `contextTokens`, `params.num_ctx`, `maxTokens`, `params.keep_alive`, `params.thinking` when supported; distinguish first-load latency.
+- https://docs.openclaw.ai/providers/ollama/advanced — effective Ollama context and output/thinking controls.
+- https://docs.openclaw.ai/concepts/context — prompt includes system instructions, tools, session history and tool results.
+- https://docs.openclaw.ai/concepts/compaction and https://docs.openclaw.ai/concepts/session-pruning — compact old history and prune old tool results.
+
+Proposed **unapplied** A/B tests: cap ordinary local-agent context to 16384 when compatible with agent instructions/tool schemas; constrain routine output to ~1024–2048 tokens; trial 15m keep_alive; disable reasoning for simple requests only where supported; inspect session context and tool schemas before pruning. Preserve advanced/large-context paths for tasks that require them. Measure end-to-end wall time, model load, prompt evaluation, generation, number of model/tool calls, tokens, and quality before/after. Do not change production configuration without operator review. Keep installer and ACCE runtime hardware-agnostic.
