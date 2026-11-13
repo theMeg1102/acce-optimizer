@@ -85,3 +85,22 @@ The canonical `CapabilityRegistry.from_production_snapshot` calls `validate_prod
 - No `set -e`, `exit`, or destructive shell snippets that terminate an interactive SSH session on failure.
 - Do not restart Gateway, enable adaptive routing, reinstall the plugin, delete state, or expose a port without a deliberate change plan and operator approval.
 - Keep previous sprint directories intact but completely isolated from the new deployment.
+
+## Ollama capability inventory — confirmed read-only API observations
+
+Discovery procedure: query `GET /api/tags`, exclude the embedding model `nomic-embed-text:latest` and cloud-tagged `gemma4:31b-cloud`, then `POST /api/show` for each of eight local candidates. The observed output below is the raw model-advertised context length, **not** a measured effective OpenClaw context window or production authorization.
+
+| Model | Ollama-reported context | Advertised capabilities |
+|---|---:|---|
+| `deepseek-r1:14b` | 131072 | tools, thinking, completion |
+| `phi4:14b` | 16384 | completion |
+| `gemma3:12b` | 131072 | completion, vision |
+| `gemma4:12b-it-qat` | 262144 | completion, vision, audio, tools, thinking |
+| `qwen3:14b` | 40960 | completion, tools, thinking |
+| `gemma4:e4b` | 131072 | completion, vision, audio, tools, thinking |
+| `gemma3n:e4b` | 32768 | completion |
+| `qwen3:8b` | 40960 | completion, tools, thinking |
+
+All eight `/api/show` requests succeeded. Source: operator-run read-only Ollama API queries on Aurora. `gemma4:12b-it-qat` previously showed an effective OpenClaw telemetry budget of 32768; do not confuse that with its 262144 Ollama model-advertised limit.
+
+**Final installer requirement:** implement repeatable local discovery as a non-mutating preflight; retain raw evidence with timestamp, source, provider/model identity and model digest when available. Require explicit operator approval, verified OpenClaw catalog membership and benchmarked latency/quality before production authorization. Do not treat Ollama-advertised `tools`, `thinking`, `vision` or `audio` as proof of end-to-end OpenClaw behavior.
