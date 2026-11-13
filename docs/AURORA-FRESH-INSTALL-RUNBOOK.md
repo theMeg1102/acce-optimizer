@@ -116,3 +116,17 @@ The final product must **not** hard-code GPU vendors, PCI IDs, model-specific me
 - For reproducible benchmarks, measure actual execution placement and effective context under load, run one model at a time, and record cold/warm timing, tokens, latency and memory use.
 - Treat observed hardware characteristics as **per-installation evidence**, stored outside the product's version-controlled defaults. Never promote a single machine's hardware into a universal installer assumption.
 - Do not interrupt active workloads or unload models without operator approval.
+
+## Concurrent-workload inference observation — not a clean benchmark
+
+Operator explicitly reported a local agent request running during this test. A separate `POST /api/generate` request to Ollama for `gemma4:e4b`, prompt "Responde únicamente con la palabra OK.", `stream:false`, `num_ctx:2048`, `num_predict:16`, `keep_alive:5m`, returned:
+- `response: OK`
+- `total_duration:15480778600` ns (15.4808 s)
+- `load_duration:15180338948` ns (15.1803 s)
+- `prompt_eval_count:24`, `eval_count:2`, `eval_duration:71527000` ns (0.0715 s)
+
+Immediately following, `ollama ps` reported:
+- `gemma4:12b-it-qat`: `7.6 GB`, `100% GPU`, context `32768`.
+- `gemma4:e4b`: `148 MB`, `100% GPU`, context `2048`.
+
+Interpretation: Ollama reported both models as fully GPU-resident at that instant; this does **not** prove simultaneous token generation or an idle-machine benchmark. The very small reported residency for `gemma4:e4b` should be recorded as observed, not generalized as typical model memory consumption. Separate cold-load, prompt evaluation, generation, and queue/wall-clock effects. The workload was concurrent with the user's live agent, so do not assign production latency/quality scores from this single run. Avoid further benchmark calls until the active agent finishes or the operator authorizes interference. Final installer remains hardware-agnostic; no host-specific GPU identification is required.
