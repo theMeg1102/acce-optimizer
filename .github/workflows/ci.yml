@@ -132,7 +132,7 @@ jobs:
           # Only this disposable CI profile is permitted to bypass ClawHub
           # archive review. The tarball was built from this checked-out commit.
           # Never apply --force to an existing Aurora installation.
-          node_modules/.bin/openclaw --profile acce-ci-install plugins install "$package" --force
+          node_modules/.bin/openclaw --profile acce-ci-install plugins install "$package" --force --accept-capabilities
           node_modules/.bin/openclaw --profile acce-ci-install plugins list --json > "$RUNNER_TEMP/acce-plugins.json"
           node --input-type=module - "$RUNNER_TEMP/acce-plugins.json" <<'NODE'
           import fs from "node:fs";
