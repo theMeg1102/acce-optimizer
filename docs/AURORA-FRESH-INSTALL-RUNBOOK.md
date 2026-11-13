@@ -116,3 +116,11 @@ Benchmark guardrail: run one model at a time, inspect `ollama ps` and GPU utiliz
 Operator explicitly confirmed Aurora **does not use NVIDIA**. Prior suggestion to run `nvidia-smi` was incorrect; command was not installed and must not be installed as a prerequisite. GPU vendor/model remains unverified: do **not** assume AMD or Intel. Future installer must use vendor-neutral detection first (e.g., `lspci -nn | grep -Ei 'VGA|3D|Display'`), then appropriate vendor-specific diagnostics only after hardware is identified.
 
 `ollama ps` returned headers only (no models currently loaded). This is an observed idle Ollama state, not evidence that inference is GPU-accelerated. Operator reports 16 GB allocated VRAM, which still requires verification against actual backend usage.
+
+## Verified AMD GPU identification
+
+Operator executed `lspci -nn | grep -Ei 'VGA|3D|Display'` and observed:
+```text
+c4:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Phoenix1 [1002:15bf] (rev c2)
+```
+Aurora uses an integrated AMD Phoenix1 GPU, not NVIDIA. No NVIDIA utilities or CUDA packages should be installed. The earlier operator statement "16 GB assigned VRAM" is a configured memory allocation claim, not verified dedicated VRAM; integrated GPUs may use shared/reserved system memory. Before benchmarking, determine Ollama backend (ROCm/Vulkan/CPU) and actual CPU/GPU residency via `ollama ps` during an active inference; `ollama ps` when idle shows no loaded models.
