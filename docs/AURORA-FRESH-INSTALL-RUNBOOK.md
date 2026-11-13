@@ -194,3 +194,16 @@ Proposed **unapplied** A/B tests: cap ordinary local-agent context to 16384 when
 ## Operator approval for optimization and slash-command clarification
 
 Operator approved the staged OpenClaw/Ollama optimization plan. An attempt to run `/context detail` in an Ubuntu Bash shell returned `-bash: /context: No such file or directory`. Clarification: `/context detail` is an **OpenClaw chat slash command**, to be sent as a standalone message through a supported OpenClaw chat interface; it is not an OS command. No system configuration was changed by the failed shell invocation. Next step: capture chat-side context diagnostics before changing model context, output, thinking, caching, or session-pruning settings. Back up actual OpenClaw configuration before edits and preserve ability to roll back; no unmeasured tuning or vendor-specific defaults.
+
+## OpenClaw /context detail — tool schema dominates prompt
+
+Operator supplied output of OpenClaw chat command `/context detail`:
+- Workspace `/home/node/.openclaw/workspace`; bootstrap max/file 20000 chars, max/total 60000 chars.
+- System prompt estimate `34244` chars / `8561` tokens, including project context `16742` chars / `4186` tokens.
+- Injected workspace: AGENTS.md 6449 chars/~1613 tokens, SOUL.md 1526/~382, IDENTITY.md 1398/~350, USER.md 1910/~478.
+- Skills list 5681 chars/~1421 tokens; 18 skills.
+- Tool schemas JSON `78628` chars / `19657` tokens; this is ~69.7% of total tracked prompt estimate.
+- Largest schemas: message ~2644 tokens, automations ~2202, sessions_spawn ~1527, computer ~1262, theme ~1240, browser ~1234, sessions ~1121, nodes ~725, dashboard ~646, mobile_ui ~511.
+- Tracked prompt estimate `112872` chars / `28218` tokens. Actual cached context usage `0` tokens, session context `?`; do not treat tracked estimate as measured provider tokens. Only 2 real conversation messages.
+- Diagnostic implication: do NOT immediately reduce context window from 32768 to 16384; estimated static prompt alone is ~28218 tokens. The highest-priority optimization is **selective tool exposure**, preserving access to required capabilities and minimizing tool schemas for routine agent requests. Avoid disabling capabilities globally without inspecting agent-specific tool profiles and rollback strategy.
+- Next: inspect current effective OpenClaw tool configuration and supported per-agent tool policy using read-only commands, then propose reversible A/B test; measure latency and functional regressions. ACCE product must not hard-code this host's tool list or context values.
