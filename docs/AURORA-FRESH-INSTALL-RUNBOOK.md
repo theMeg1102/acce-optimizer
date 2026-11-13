@@ -157,3 +157,22 @@ Operator ran `systemctl cat ollama`. Service starts `/usr/local/bin/ollama serve
 - `OLLAMA_IGPU_ENABLE=1` (present as operator-configured environment variable; do not generalize this vendor/backend-specific setting to the installer).
 
 No explicit `OLLAMA_MAX_LOADED_MODELS` or `OLLAMA_NUM_PARALLEL` appeared in the systemd unit/drop-in. Their **effective** values or Ollama defaults were not established by this output. This does not explain the previously observed ~16-second load duration, and no cause should be asserted. Continue with read-only effective-environment/log diagnostics before proposing changes. Do not modify the running Ollama/OpenClaw services or publish host-specific values as product defaults.
+
+## Ollama runtime evidence — Vulkan backend and network context
+
+Operator supplied journal output from `sudo journalctl -u ollama --since "30 minutes ago" --no-pager | grep -Ei 'load|unload|runner|memory|evict|sched|gpu|vram' | tail -80`. At 2026-11-12 19:59:05–19:59:06 local time the runner emitted:
+- `load_tensors: offloading output layer to GPU`
+- `load_tensors: offloading 3 repeating layers to GPU`
+- `load_tensors: offloaded 5/5 layers to GPU`
+- `CPU_Mapped model buffer size = 68.00 MiB`
+- `Vulkan0 model buffer size = 79.05 MiB`
+- `Vulkan0 compute buffer size = 23.00 MiB`
+- `Vulkan_Host compute buffer size = 13.01 MiB`
+- `Flash Attention was auto, set to enabled`
+- `load_model: initializing, n_slots = 1, n_ctx_slot = 2048`
+- `llama_server: model loaded`
+- `loaded runners count=1`
+
+This **confirms the Vulkan GPU backend** for the observed runner. Offload count applies to the particular loading stage, not necessarily every auxiliary multimodal component. The filtered last 80 lines do not show a preceding unload/eviction event, and cannot establish why the previous identical request had `load_duration=16.151s`. Do not infer memory pressure or a scheduler bug without temporal corroboration. Future benchmarks must record the specific backend from runtime evidence and remain vendor-agnostic.
+
+Operator confirmed host is behind an ONT using CGNAT and has network segmentation. Document this as operator-reported network context, **not proof** that `OLLAMA_HOST=0.0.0.0:11434` is inaccessible from all unauthorized LAN segments. Do not change bind address or network configuration during the current test.
