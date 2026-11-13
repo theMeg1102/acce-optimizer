@@ -104,3 +104,9 @@ Discovery procedure: query `GET /api/tags`, exclude the embedding model `nomic-e
 All eight `/api/show` requests succeeded. Source: operator-run read-only Ollama API queries on Aurora. `gemma4:12b-it-qat` previously showed an effective OpenClaw telemetry budget of 32768; do not confuse that with its 262144 Ollama model-advertised limit.
 
 **Final installer requirement:** implement repeatable local discovery as a non-mutating preflight; retain raw evidence with timestamp, source, provider/model identity and model digest when available. Require explicit operator approval, verified OpenClaw catalog membership and benchmarked latency/quality before production authorization. Do not treat Ollama-advertised `tools`, `thinking`, `vision` or `audio` as proof of end-to-end OpenClaw behavior.
+
+## Aurora memory baseline — operator observation
+
+`free -h` reported: 14 GiB total RAM, 3.5 GiB used, 2.0 GiB free, 9.8 GiB buff/cache, 11 GiB available; swap 8.0 GiB total, 2.8 GiB used, 5.2 GiB free. Operator reports 16 GB assigned VRAM. VRAM usage, GPU type and effective GPU residency **have not yet been independently measured**.
+
+Benchmark guardrail: run one model at a time, inspect `ollama ps` and GPU utilization/memory before tests, do not unload models or interrupt active Gateway work without operator approval. Record cold vs warm load, prompt/generation token counts, latency and whether the model ran on GPU or CPU; avoid treating swap occupancy alone as proof of current pressure.
