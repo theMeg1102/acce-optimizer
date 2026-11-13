@@ -38,12 +38,12 @@ vi.mock("./task-history-store.js", () => ({
 
 import plugin from "./index.js";
 
-function makeApi(allowModelOverride: boolean, allowedModels?: unknown[]) {
+function makeApi(allowModelOverride: boolean, allowedModels?: unknown[], mode: "adaptive" | "shadow" = "adaptive") {
   const hooks = new Map<string, (...args: any[]) => unknown>();
   const services: Array<{ id: string; start: () => void; stop?: () => void }> = [];
   const api = {
     pluginConfig: {
-      mode: "adaptive",
+      mode,
       decisionServiceUrl: "http://127.0.0.1:18791",
       similarityHistoryPath: "/tmp/acce-override-authorization-test.json",
       runtimeStatusRefreshSeconds: 60,
@@ -107,8 +107,8 @@ describe("ACCE override authorization integration", () => {
     vi.useRealTimers();
   });
 
-  async function invokeHook(allowModelOverride: boolean, allowedModels?: unknown[]) {
-    const { api, hooks, services } = makeApi(allowModelOverride, allowedModels);
+  async function invokeHook(allowModelOverride: boolean, allowedModels?: unknown[], mode: "adaptive" | "shadow" = "adaptive") {
+    const { api, hooks, services } = makeApi(allowModelOverride, allowedModels, mode);
     (plugin as unknown as { setup: (api: any) => void }).setup(api);
     const runtimeService = services.find((service) => service.id === "acce-optimizer-runtime-status");
     expect(runtimeService).toBeDefined();
@@ -120,6 +120,12 @@ describe("ACCE override authorization integration", () => {
     runtimeService?.stop?.();
     return result;
   }
+
+  it("never invokes the decision bridge or overrides a model in shadow mode", async () => {
+    await expect(invokeHook(true, ["ollama/qwen3:8b"], "shadow")).resolves.toBeUndefined();
+    expect(mocks.decide).not.toHaveBeenCalled();
+    expect(mocks.recordAndEvaluateWithId).toHaveBeenCalledTimes(1);
+  });
 
   it("keeps OpenClaw's default when the decision bridge fails", async () => {
     mocks.decide.mockRejectedValueOnce(new Error("isolated bridge unavailable"));
