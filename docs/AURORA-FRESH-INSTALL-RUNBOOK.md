@@ -130,3 +130,14 @@ Immediately following, `ollama ps` reported:
 - `gemma4:e4b`: `148 MB`, `100% GPU`, context `2048`.
 
 Interpretation: Ollama reported both models as fully GPU-resident at that instant; this does **not** prove simultaneous token generation or an idle-machine benchmark. The very small reported residency for `gemma4:e4b` should be recorded as observed, not generalized as typical model memory consumption. Separate cold-load, prompt evaluation, generation, and queue/wall-clock effects. The workload was concurrent with the user's live agent, so do not assign production latency/quality scores from this single run. Avoid further benchmark calls until the active agent finishes or the operator authorizes interference. Final installer remains hardware-agnostic; no host-specific GPU identification is required.
+
+## Second Ollama inference observation — cold load, 128-token cap
+
+Operator ran `POST /api/generate` for `gemma4:e4b` with Spanish prompt "Explica en tres frases qué es una API REST.", `stream:false`, `keep_alive:5m`, `num_ctx:2048`, `num_predict:128`, `temperature:0`. Reported response metrics:
+- `total_duration:24.955` seconds
+- `load_duration:21.827` seconds
+- `prompt_eval_duration:0.214` seconds; `prompt_eval_count:27`
+- `eval_duration:2.906` seconds; `eval_count:128`
+- `tokens_per_second:44.05` computed from generated tokens and eval duration.
+
+This was **not** a warm-only measurement: model load accounted for ~87.5% of total time. Generated tokens reached the configured `num_predict` cap of 128, so completion quality and whether the answer was truncated cannot be determined from the reported fields; the script did not print `done_reason` or the text. Do not use the result as a definitive latency or quality score. Installer/evaluator requirements: record `done_reason`, distinguish cold vs warm, and measure actual generation throughput separately from end-to-end latency. Avoid machine-specific benchmark defaults in product code.
