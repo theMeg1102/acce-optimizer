@@ -121,6 +121,26 @@ jobs:
       - run: npm run plugin:validate
       - name: Pack OpenClaw plugin candidate
         run: npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Isolated OpenClaw plugin installation and discovery smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/acce-install-smoke-home"
+          mkdir -p "$HOME"
+          package="$RUNNER_TEMP/openclaw-plugin-acce-optimizer-0.1.3.tgz"
+          test -f "$package"
+          node_modules/.bin/openclaw --profile acce-ci-install plugins install "$package"
+          node_modules/.bin/openclaw --profile acce-ci-install plugins list --json > "$RUNNER_TEMP/acce-plugins.json"
+          node --input-type=module - "$RUNNER_TEMP/acce-plugins.json" <<'NODE'
+          import fs from "node:fs";
+          const raw = fs.readFileSync(process.argv[2], "utf8");
+          const parsed = JSON.parse(raw);
+          const entries = Array.isArray(parsed) ? parsed :
+            Array.isArray(parsed.plugins) ? parsed.plugins : [];
+          const plugin = entries.find((entry) => entry.id === "acce-optimizer");
+          if (!plugin) throw new Error("ACCE plugin absent from isolated OpenClaw plugin inventory");
+          console.log(JSON.stringify({ id: plugin.id, status: plugin.status ?? null, enabled: plugin.enabled ?? null }));
+          NODE
       - uses: actions/upload-artifact@v4
         with:
           name: acce-optimizer-openclaw-0.1.3
