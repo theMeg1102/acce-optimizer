@@ -110,3 +110,9 @@ All eight `/api/show` requests succeeded. Source: operator-run read-only Ollama 
 `free -h` reported: 14 GiB total RAM, 3.5 GiB used, 2.0 GiB free, 9.8 GiB buff/cache, 11 GiB available; swap 8.0 GiB total, 2.8 GiB used, 5.2 GiB free. Operator reports 16 GB assigned VRAM. VRAM usage, GPU type and effective GPU residency **have not yet been independently measured**.
 
 Benchmark guardrail: run one model at a time, inspect `ollama ps` and GPU utilization/memory before tests, do not unload models or interrupt active Gateway work without operator approval. Record cold vs warm load, prompt/generation token counts, latency and whether the model ran on GPU or CPU; avoid treating swap occupancy alone as proof of current pressure.
+
+## GPU detection correction and unloaded Ollama baseline
+
+Operator explicitly confirmed Aurora **does not use NVIDIA**. Prior suggestion to run `nvidia-smi` was incorrect; command was not installed and must not be installed as a prerequisite. GPU vendor/model remains unverified: do **not** assume AMD or Intel. Future installer must use vendor-neutral detection first (e.g., `lspci -nn | grep -Ei 'VGA|3D|Display'`), then appropriate vendor-specific diagnostics only after hardware is identified.
+
+`ollama ps` returned headers only (no models currently loaded). This is an observed idle Ollama state, not evidence that inference is GPU-accelerated. Operator reports 16 GB allocated VRAM, which still requires verification against actual backend usage.
