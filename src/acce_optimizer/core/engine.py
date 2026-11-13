@@ -75,6 +75,11 @@ def build_execution_plan(request: DecisionRequest, registry: CapabilityRegistry)
             else:
                 surviving_routes.append(route)
 
+        # Prefer routes explicitly supporting the task class; retain general
+        # routes only when no task-specific route survives hard governance.
+        task_specific = [route for route in surviving_routes if request.task_class in route.supported_task_classes]
+        surviving_routes = task_specific or [route for route in surviving_routes if "general" in route.supported_task_classes]
+
         max_routes = max(request.search_budget_max_candidate_routes, 0)
         for route_index, route in enumerate(surviving_routes):
             if len(routes_evaluated) >= max_routes:
@@ -231,7 +236,7 @@ def route_blocking_reason(request: DecisionRequest, route: CandidateRoute) -> st
         return "metadata_incomplete"
     if route.availability != "available":
         return "capability_instance_unavailable"
-    if request.task_class not in route.supported_task_classes:
+    if request.task_class not in route.supported_task_classes and "general" not in route.supported_task_classes:
         return "unsupported_task_class"
     projected_context = _projected_context_tokens(request)
     if route.context_window_tokens is not None and projected_context > route.context_window_tokens:

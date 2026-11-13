@@ -139,6 +139,8 @@ class DecisionRequest:
     context_hard_limit_tokens: int
     context_compaction_enabled: bool
     context_compaction_in_progress: bool
+    preferred_route_id: str | None = None
+    preferred_route_order: tuple[str, ...] = ()
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "DecisionRequest":
@@ -215,6 +217,8 @@ class DecisionRequest:
             raise ContractValidationError("urgency must be normal or urgent")
         return cls(
             request_id=_required_text(data, "request_id"),
+            preferred_route_id=_optional_text(data.get("preferred_route_id"), "preferred_route_id"),
+            preferred_route_order=_text_list(data.get("preferred_route_order", []), "preferred_route_order"),
             task_class=_required_text(data, "task_class"),
             summary=summary,
             required_capabilities=_text_list(data.get("required_capabilities", []), "required_capabilities"),
@@ -290,6 +294,8 @@ class DecisionRequest:
     def normalized(self) -> dict[str, Any]:
         return {
             "request_id": self.request_id,
+            **({"preferred_route_id": self.preferred_route_id} if self.preferred_route_id else {}),
+            **({"preferred_route_order": list(self.preferred_route_order)} if self.preferred_route_order else {}),
             "task_class": self.task_class,
             "summary": self.summary,
             "required_capabilities": list(self.required_capabilities),
@@ -375,6 +381,9 @@ class CandidateRoute:
     quota_metered: bool
     monetary_metered: bool
     context_window_tokens: int | None
+    observed_success_rate: float | None = None
+    observed_sample_count: int = 0
+    runtime_quota_remaining_fraction: float | None = None
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "CandidateRoute":
@@ -426,6 +435,15 @@ class CandidateRoute:
             context_window_tokens=_optional_integer(
                 data.get("context_window_tokens"), "context_window_tokens"
             ),
+            observed_success_rate=(
+                _number(data.get("observed_success_rate"), "observed_success_rate", 0.0, maximum=1.0)
+                if data.get("observed_success_rate") is not None else None
+            ),
+            observed_sample_count=_integer(data.get("observed_sample_count"), "observed_sample_count", 0),
+            runtime_quota_remaining_fraction=(
+                _number(data.get("runtime_quota_remaining_fraction"), "runtime_quota_remaining_fraction", 0.0, maximum=1.0)
+                if data.get("runtime_quota_remaining_fraction") is not None else None
+            ),
         )
 
     def as_evidence(self) -> dict[str, Any]:
@@ -460,4 +478,6 @@ class CandidateRoute:
             "quota_metered": self.quota_metered,
             "monetary_metered": self.monetary_metered,
             "context_window_tokens": self.context_window_tokens,
+            **({"observed_success_rate": self.observed_success_rate, "observed_sample_count": self.observed_sample_count} if self.observed_success_rate is not None and self.observed_sample_count > 0 else {}),
+            **({"runtime_quota_remaining_fraction": self.runtime_quota_remaining_fraction} if self.runtime_quota_remaining_fraction is not None else {}),
         }

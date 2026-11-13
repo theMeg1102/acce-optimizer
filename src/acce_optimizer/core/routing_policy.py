@@ -29,6 +29,7 @@ class RoutingPolicy:
     complexity_weight: float = 1.0
 
     local_preference_factor: float = 0.80
+    explicit_preference_penalty: float = 0.05
     quota_scarcity_weight: float = 2.0
     budget_scarcity_weight: float = 2.0
 
@@ -82,6 +83,7 @@ class RoutingPolicy:
             "complexity_weight",
             "quota_scarcity_weight",
             "budget_scarcity_weight",
+            "explicit_preference_penalty",
         ):
             if getattr(self, field) < 0:
                 raise ContractValidationError(f"{field} must be non-negative")
@@ -177,6 +179,27 @@ def cloud_override_allowed(
 
     expected_advantage = (cloud_outcome - local_outcome) / local_outcome
     return expected_advantage >= threshold
+
+
+def route_preference_penalty(
+    route_id: str,
+    admitted_route_ids: set[str],
+    *,
+    preferred_route_id: str | None,
+    preferred_route_order: tuple[str, ...],
+    policy: RoutingPolicy,
+) -> float:
+    """Return a soft preference penalty; callers apply it only to admitted routes."""
+    if preferred_route_id and preferred_route_id in admitted_route_ids:
+        return 0.0 if route_id == preferred_route_id else policy.explicit_preference_penalty
+    admitted_template = [item for item in preferred_route_order if item in admitted_route_ids]
+    if not admitted_template:
+        return 0.0
+    try:
+        rank = admitted_template.index(route_id)
+        return rank * policy.explicit_preference_penalty
+    except ValueError:
+        return (len(admitted_template) + 1) * policy.explicit_preference_penalty
 
 
 def effective_edge_cost(

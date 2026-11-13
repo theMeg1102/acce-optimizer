@@ -267,13 +267,17 @@ def validate_production_registry(snapshot: Mapping[str, Any]) -> dict[str, Any]:
         resource_type = _production_text(raw_instance, f"{prefix}.resource_type")
         if resource_type not in _MODEL_RESOURCE_TYPES:
             continue
-        model_ref = _production_text(raw_instance, f"{prefix}.model_used")
+        route_model_id = _production_text(raw_instance, f"{prefix}.model_used")
+        route_provider_id = _production_text(raw_instance, f"{prefix}.provider_id")
+        # Registry inventory references are provider-qualified, while route
+        # model_used is the model identifier expected by OpenClaw's runtime
+        # catalog and override API. Join the two only for inventory validation.
+        model_ref = f"{route_provider_id}/{route_model_id}"
         inventory = model_inventory.get(model_ref)
         if inventory is None:
             raise ContractValidationError(
-                f"production registry {prefix}.model_used is not in the model inventory"
+                f"production registry {prefix}.model_used is not in the provider's model inventory"
             )
-        route_provider_id = _production_text(raw_instance, f"{prefix}.provider_id")
         if route_provider_id != inventory["provider_id"]:
             raise ContractValidationError(
                 f"production registry {prefix}.provider_id does not match its model"

@@ -10,6 +10,7 @@ from .models import CandidateRoute, DecisionRequest
 from .resource_state import ResourceState
 from .engine import route_blocking_reason
 from .routing_policy import (
+    route_preference_penalty,
     RoutingPolicy,
     cloud_override_allowed,
     effective_edge_cost,
@@ -119,6 +120,7 @@ def build_execution_graph(
     edges: list[GraphEdge] = []
 
     candidates = tuple(routes)
+    admissible: list[tuple[CandidateRoute, LearnedRouteEstimate, GraphNode]] = []
     for route in candidates:
         estimate = estimates.get(route.route_id) or _estimate_from_route(route)
         node_id = f"route:{route.route_id}"
@@ -132,14 +134,19 @@ def build_execution_graph(
             authorized=True,
             available=route.availability == "available",
         )
-
         if not route_is_governed(node, estimate, policy):
             continue
         if route_blocking_reason(request, route) is not None:
             continue
+        admissible.append((route, estimate, node))
 
-        route_by_node[node_id] = route
-        estimate_by_node[node_id] = estimate
+    # Functionality is filtered before cost ranking. Use exact task-class routes
+    # whenever at least one passes governance; use "general" only as a fallback.
+    task_specific = [item for item in admissible if request.task_class in item[0].supported_task_classes]
+    eligible = task_specific or [item for item in admissible if "general" in item[0].supported_task_classes]
+    for route, estimate, node in eligible:
+        route_by_node[node.node_id] = route
+        estimate_by_node[node.node_id] = estimate
         nodes.append(node)
 
     local_nodes = [
@@ -216,13 +223,27 @@ def search_execution_graph(
     *,
     algorithm: str = "astar",
     max_explored_nodes: int = 10_000,
+    preferred_route_id: str | None = None,
+    preferred_route_order: tuple[str, ...] = (),
 ) -> AdaptiveSearchResult:
     """Optimize the governed graph with deterministic dynamic edge costs."""
+
+    admitted_route_ids = {route.route_id for route in graph.route_by_node.values()}
 
     def edge_cost(edge: GraphEdge) -> float:
         target = next(node for node in graph.snapshot.nodes if node.node_id == edge.target)
         estimate = graph.estimate_by_node.get(edge.target)
-        return effective_edge_cost(edge, target, resources, estimate, policy)
+        cost = effective_edge_cost(edge, target, resources, estimate, policy)
+        route = graph.route_by_node.get(edge.target)
+        if route is not None:
+            cost += route_preference_penalty(
+                route.route_id,
+                admitted_route_ids,
+                preferred_route_id=preferred_route_id,
+                preferred_route_order=preferred_route_order,
+                policy=policy,
+            )
+        return cost
 
     if algorithm == "dijkstra":
         result = dijkstra(
@@ -260,14 +281,14 @@ def search_execution_graph(
 def _estimate_from_route(route: CandidateRoute) -> LearnedRouteEstimate:
     return LearnedRouteEstimate(
         route_id=route.route_id,
-        sample_count=0,
-        confidence=0.0,
-        success_rate=route.quality_score,
+        sample_count=route.observed_sample_count,
+        confidence=min(route.observed_sample_count / 10.0, 1.0),
+        success_rate=route.observed_success_rate if route.observed_success_rate is not None else route.quality_score,
         quality_score=route.quality_score,
         latency_p50=float(route.estimated_latency_ms),
         latency_p95=float(route.estimated_latency_ms),
         context_growth=0.0,
-        quota_consumption=1.0 if route.quota_metered else 0.0,
+        quota_consumption=(max(0.0, 1.0 - route.runtime_quota_remaining_fraction) if route.runtime_quota_remaining_fraction is not None else (1.0 if route.quota_metered else 0.0)),
         fallback_rate=0.0,
         retry_rate=0.0,
         user_acceptance=None,
