@@ -149,3 +149,11 @@ Operator executed two sequential `POST /api/generate` calls to `gemma4:e4b` with
 - Call 2: total `16.426s`, load `16.151s`, generated `2` tokens, `done_reason:stop`.
 
 The second request was ~23.7x slower and its load duration dominated (~98.3%). This is consistent with a reload or backend initialization, but the cause is **unverified**. Do not assert eviction, memory pressure, or GPU backend change without corroborating Ollama logs and configuration. A keep_alive setting does not by itself prove residency throughout concurrent activity. Evaluator should track model residency and reload events, isolate contention and queue effects, and distinguish load time from inference latency. No production scoring or universal hardware assumptions from this observation.
+
+## Ollama systemd configuration inspection — runtime-specific evidence
+
+Operator ran `systemctl cat ollama`. Service starts `/usr/local/bin/ollama serve` under user/group `ollama`, with `Restart=always`. The drop-in override explicitly sets:
+- `OLLAMA_HOST=0.0.0.0:11434` (binds all interfaces; review network access/firewall separately before production).
+- `OLLAMA_IGPU_ENABLE=1` (present as operator-configured environment variable; do not generalize this vendor/backend-specific setting to the installer).
+
+No explicit `OLLAMA_MAX_LOADED_MODELS` or `OLLAMA_NUM_PARALLEL` appeared in the systemd unit/drop-in. Their **effective** values or Ollama defaults were not established by this output. This does not explain the previously observed ~16-second load duration, and no cause should be asserted. Continue with read-only effective-environment/log diagnostics before proposing changes. Do not modify the running Ollama/OpenClaw services or publish host-specific values as product defaults.
