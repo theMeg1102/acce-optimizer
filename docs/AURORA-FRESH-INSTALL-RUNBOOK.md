@@ -105,22 +105,14 @@ All eight `/api/show` requests succeeded. Source: operator-run read-only Ollama 
 
 **Final installer requirement:** implement repeatable local discovery as a non-mutating preflight; retain raw evidence with timestamp, source, provider/model identity and model digest when available. Require explicit operator approval, verified OpenClaw catalog membership and benchmarked latency/quality before production authorization. Do not treat Ollama-advertised `tools`, `thinking`, `vision` or `audio` as proof of end-to-end OpenClaw behavior.
 
-## Aurora memory baseline — operator observation
+## Hardware-agnostic resource discovery and benchmarking
 
-`free -h` reported: 14 GiB total RAM, 3.5 GiB used, 2.0 GiB free, 9.8 GiB buff/cache, 11 GiB available; swap 8.0 GiB total, 2.8 GiB used, 5.2 GiB free. Operator reports 16 GB assigned VRAM. VRAM usage, GPU type and effective GPU residency **have not yet been independently measured**.
+The final product must **not** hard-code GPU vendors, PCI IDs, model-specific memory allocations, CUDA/ROCm/Vulkan requirements, host memory sizes, or vendor-specific diagnostic tools. Installer and runtime should work on CPU-only systems as well as supported GPU-accelerated systems, with appropriate capability detection and clear fallback behavior.
 
-Benchmark guardrail: run one model at a time, inspect `ollama ps` and GPU utilization/memory before tests, do not unload models or interrupt active Gateway work without operator approval. Record cold vs warm load, prompt/generation token counts, latency and whether the model ran on GPU or CPU; avoid treating swap occupancy alone as proof of current pressure.
-
-## GPU detection correction and unloaded Ollama baseline
-
-Operator explicitly confirmed Aurora **does not use NVIDIA**. Prior suggestion to run `nvidia-smi` was incorrect; command was not installed and must not be installed as a prerequisite. GPU vendor/model remains unverified: do **not** assume AMD or Intel. Future installer must use vendor-neutral detection first (e.g., `lspci -nn | grep -Ei 'VGA|3D|Display'`), then appropriate vendor-specific diagnostics only after hardware is identified.
-
-`ollama ps` returned headers only (no models currently loaded). This is an observed idle Ollama state, not evidence that inference is GPU-accelerated. Operator reports 16 GB allocated VRAM, which still requires verification against actual backend usage.
-
-## Verified AMD GPU identification
-
-Operator executed `lspci -nn | grep -Ei 'VGA|3D|Display'` and observed:
-```text
-c4:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Phoenix1 [1002:15bf] (rev c2)
-```
-Aurora uses an integrated AMD Phoenix1 GPU, not NVIDIA. No NVIDIA utilities or CUDA packages should be installed. The earlier operator statement "16 GB assigned VRAM" is a configured memory allocation claim, not verified dedicated VRAM; integrated GPUs may use shared/reserved system memory. Before benchmarking, determine Ollama backend (ROCm/Vulkan/CPU) and actual CPU/GPU residency via `ollama ps` during an active inference; `ollama ps` when idle shows no loaded models.
+- Discover available CPU, RAM, swap, accelerators, memory and inference backends dynamically using portable interfaces where possible; use optional platform/vendor adapters only after capability detection.
+- Do not install drivers or vendor tools automatically as part of probing.
+- `ollama ps` returned headers only during this installation: no model was loaded at the time. This is not evidence of CPU-only inference.
+- Querying explicit backend-related environment variables returned no matching values. An empty result does **not** identify the active Ollama backend.
+- For reproducible benchmarks, measure actual execution placement and effective context under load, run one model at a time, and record cold/warm timing, tokens, latency and memory use.
+- Treat observed hardware characteristics as **per-installation evidence**, stored outside the product's version-controlled defaults. Never promote a single machine's hardware into a universal installer assumption.
+- Do not interrupt active workloads or unload models without operator approval.
