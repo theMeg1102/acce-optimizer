@@ -207,3 +207,11 @@ Operator supplied output of OpenClaw chat command `/context detail`:
 - Tracked prompt estimate `112872` chars / `28218` tokens. Actual cached context usage `0` tokens, session context `?`; do not treat tracked estimate as measured provider tokens. Only 2 real conversation messages.
 - Diagnostic implication: do NOT immediately reduce context window from 32768 to 16384; estimated static prompt alone is ~28218 tokens. The highest-priority optimization is **selective tool exposure**, preserving access to required capabilities and minimizing tool schemas for routine agent requests. Avoid disabling capabilities globally without inspecting agent-specific tool profiles and rollback strategy.
 - Next: inspect current effective OpenClaw tool configuration and supported per-agent tool policy using read-only commands, then propose reversible A/B test; measure latency and functional regressions. ACCE product must not hard-code this host's tool list or context values.
+
+## OpenClaw effective tool profile — full
+
+Operator ran `docker exec openclaw-202698-openclaw-gateway-1 openclaw config get tools` and obtained:
+```json
+{"profile":"full","web":{"search":{"enabled":true,"provider":"searxng"}}}
+```
+The broad `full` tool profile is consistent with the previously observed ~19,657-token tool-schema footprint, but does not by itself prove that all tool schemas originate solely from this profile (plugins may add tools). Preserve the SearXNG search configuration. Before changing any tool policy, verify the exact profile and allow/deny semantics supported by the installed OpenClaw 2026.10.5 version and check that ACCE's `decision_evaluate` tool and critical agent workflows remain accessible. Prefer reversible per-agent restrictions over global capability removal; back up the effective configuration and run A/B context/latency checks.
