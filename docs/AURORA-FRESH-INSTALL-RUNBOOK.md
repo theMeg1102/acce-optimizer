@@ -141,3 +141,11 @@ Operator ran `POST /api/generate` for `gemma4:e4b` with Spanish prompt "Explica 
 - `tokens_per_second:44.05` computed from generated tokens and eval duration.
 
 This was **not** a warm-only measurement: model load accounted for ~87.5% of total time. Generated tokens reached the configured `num_predict` cap of 128, so completion quality and whether the answer was truncated cannot be determined from the reported fields; the script did not print `done_reason` or the text. Do not use the result as a definitive latency or quality score. Installer/evaluator requirements: record `done_reason`, distinguish cold vs warm, and measure actual generation throughput separately from end-to-end latency. Avoid machine-specific benchmark defaults in product code.
+
+## Sequential identical Ollama calls — unexpected reload-like latency
+
+Operator executed two sequential `POST /api/generate` calls to `gemma4:e4b` with identical prompt "Responde únicamente: OK", `stream:false`, `keep_alive:10m`, `num_ctx:2048`, `num_predict:16`, `temperature:0`. Results:
+- Call 1: total `0.693s`, load `0.382s`, generated `2` tokens, `done_reason:stop`.
+- Call 2: total `16.426s`, load `16.151s`, generated `2` tokens, `done_reason:stop`.
+
+The second request was ~23.7x slower and its load duration dominated (~98.3%). This is consistent with a reload or backend initialization, but the cause is **unverified**. Do not assert eviction, memory pressure, or GPU backend change without corroborating Ollama logs and configuration. A keep_alive setting does not by itself prove residency throughout concurrent activity. Evaluator should track model residency and reload events, isolate contention and queue effects, and distinguish load time from inference latency. No production scoring or universal hardware assumptions from this observation.
