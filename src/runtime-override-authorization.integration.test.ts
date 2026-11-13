@@ -156,6 +156,23 @@ describe("ACCE override authorization integration", () => {
     await expect(invokeHook(true, ["ollama/qwen3:8b"])).resolves.toBeUndefined();
   });
 
+  it("rechecks snapshot freshness after a slow bridge decision before overriding", async () => {
+    mocks.decide.mockImplementationOnce(async () => {
+      // The runtime catalog was fresh at request start, but became stale
+      // while the bridge evaluated the route. Never trust the old snapshot.
+      vi.setSystemTime(Date.now() + 61_000);
+      return {
+        status: "execution_plan_ready",
+        providerOverride: "ollama",
+        modelOverride: "qwen3:8b",
+        decision_id: "decision-after-expiry",
+        selected_route: { route_id: "local-route" },
+      };
+    });
+    await expect(invokeHook(true, ["ollama/qwen3:8b"])).resolves.toBeUndefined();
+    expect(mocks.decide).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps OpenClaw's default when explicit operator opt-in is absent", async () => {
     await expect(invokeHook(false)).resolves.toBeUndefined();
     expect(mocks.decide).toHaveBeenCalledTimes(1);
